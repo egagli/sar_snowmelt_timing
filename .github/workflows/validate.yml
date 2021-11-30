@@ -1,0 +1,19 @@
+name: STAC Validator
+
+on: [workflow_dispatch, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install stactools
+      run: |
+        pip install stactools~=0.2
+
+    - name: Validate STAC
+      shell: bash
+      run: |
+        stac validate --recurse --no-links --no-assets catalog.json

@@ -1,0 +1,68 @@
+
+name: STAC Updater
+
+on:
+  # Run once per day at midnight
+  schedule:
+   - cron: "0 0 * * *"
+  workflow_dispatch:
+
+env:
+  GDAL_DISABLE_READDIR_ON_OPEN: EMPTY_DIR
+  AWS_NO_SIGN_REQUEST: YES
+  AWS_REGION: us-west-2
+
+jobs:
+  build-and-test:
+    if: github.repository != 'relativeorbit/aws-rtc-stac'
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Get current date
+      id: date
+      run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
+    - name: Cache conda
+      uses: actions/cache@v2
+      env:
+        # Increase this value to reset cache if environment.yml has not changed
+        CACHE_NUMBER: 0
+      with:
+        path: ~/conda_pkgs_dir
+        key:
+          ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('environment.yml') }}
+
+    - name: Setup Conda Environment
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        miniforge-version: latest
+#        mamba-version: "*"
+        environment-file: environment.yml
+        activate-environment: aws-rtc-stac
+        use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
+
+    - name: List conda packages
+      run: |
+        conda list
+
+    - name: Generate STAC
+      run: |
+        ./s1_rtc_stac.py
+
+    - name: Validate STAC
+      run: |
+        stac validate --recurse --no-links --no-assets catalog.json
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v3
+      with:
+        commit-message: "update catalog through ${{ steps.date.outputs.date }}"
+        title: "Update STAC (${{ steps.date.outputs.date }})"
+        reviewers: "egagli"
+        body: |
+          Update catalog through ${{ steps.date.outputs.date }})
