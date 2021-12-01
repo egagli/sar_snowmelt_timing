@@ -2,11 +2,15 @@ name: aws-rtc-stac
 channels:
   - conda-forge
 dependencies:
-  - python=3.8
+  - python=3.9
+  - geopandas
   - s3fs
   - rasterio=1.2
   - pystac=1.2
   - pip
   - pyyaml
+  - hvplot
+  - dask
   - pip:
     - git+https://github.com/stactools-packages/sentinel1@main
+    - git+https://github.com/gjoseph92/stackstac.git@main
