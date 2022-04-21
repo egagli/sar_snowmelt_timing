@@ -19,6 +19,7 @@ import py3dep
 import geopandas as gpd
 import rasterio as rio
 import shapely
+import scipy
 
 def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='gamma0_vv',collection='mycollection.json'):
     # GDAL environment variables for better performance
@@ -120,6 +121,58 @@ def get_dah(ds):
     DAH = np.cos(np.deg2rad(alpha_max-aspect))*np.arctan(np.deg2rad(slope))
     DAH_reproject = DAH.rio.reproject_match(ds)
     return DAH_reproject
+
+#def get_runoff_onset(ts_ds):
+#    mins_info_runoff = ts_ds.argmin(dim='time',skipna=False)
+#    runoff_dates = ts_ds[mins_info_runoff].time
+#    return runoff_dates
+
+def get_runoff_onset(ts_ds):
+    ts_ds = ts_ds.fillna(9999)
+    mins_info_runoff = ts_ds.argmin(dim='time',skipna=True)
+    runoff_dates = ts_ds[mins_info_runoff].time
+    runoff_dates = runoff_dates.where(ts_ds.isel(time=0)!=9999)
+    return runoff_dates
+
+def get_ripening_onset(ts_ds,orbit='ascending'): # fix this
+    ts_ds = ts_ds.fillna(9999)
+    ts_ds = ts_ds.where(ts_ds.coords['sat:orbit_state']==orbit,drop=True)
+    mins_info_ripening = ts_ds.differentiate(coord='time',datetime_unit='W').argmin(dim='time',skipna=False) # dt=week
+    ripening_dates = ts_ds[mins_info_ripening].time
+    ripening_dates = ripening_dates.where(ts_ds.isel(time=0)!=9999)
+    return ripening_dates
+
+def get_stats(ts_ds):
+    runoff_dates = get_runoff_onset(ts_ds)
+    ripening_dates = get_ripening_onset(ts_ds)
+    dem_projected = get_py3dep_dem(ts_ds)
+    aspect_projected = get_py3dep_aspect(ts_ds)
+    dah_projected = get_dah(ts_ds)
+    dates_df = pd.DataFrame(columns=['x','y','elevation', 'aspect','aspect_rescale','dah','runoff_dates','ripening_dates'])
+    a1, a2 = np.meshgrid(dem_projected.indexes['x'],dem_projected.indexes['y'])
+    dates_df['x'] = a1.reshape(-1)
+    dates_df['y'] = a2.reshape(-1)
+    dates_df['elevation'] = dem_projected.data.reshape(-1)
+    dates_df['aspect'] = aspect_projected.data.reshape(-1)
+    dates_df['aspect_rescale'] = np.abs(aspect_projected.data.reshape(-1)-180)
+    dates_df['dah'] = dah_projected.data.reshape(-1)
+    dates_df['runoff_dates'] = runoff_dates.dt.dayofyear.data.reshape(-1)
+    dates_df['ripening_dates'] = ripening_dates.dt.dayofyear.data.reshape(-1)
+    dates_df = dates_df.dropna()
+    
+    dates_mls_df = dates_df.filter(['elevation','dah','runoff_dates','ripening_dates'])
+    dates_mls_df.corr()
+    
+    predictors = np.append(np.ones_like([dates_df['runoff_dates']]).T,dates_mls_df.iloc[:,[0,1]].to_numpy(),axis=1)
+    B,_,_,_ = scipy.linalg.lstsq(predictors, dates_mls_df.iloc[:,2])
+    dates_df['runoff_prediction'] = predictors.dot(B)
+    
+    predictors = np.append(np.ones_like([dates_df['runoff_dates']]).T,dates_mls_df.iloc[:,[0,1]].to_numpy(),axis=1)
+    B,_,_,_ = scipy.linalg.lstsq(predictors, dates_mls_df.iloc[:,3])
+    dates_df['ripening_prediction'] = predictors.dot(B)
+
+    return dates_df
+
 
 
 def plot_timeseries_by_elevation_bin(ts_ds,dem_ds,bin_size=100,ax=None,normalize_bins=False):
