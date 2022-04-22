@@ -20,6 +20,7 @@ import geopandas as gpd
 import rasterio as rio
 import shapely
 import scipy
+import contextily as ctx
 
 def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='gamma0_vv',collection='mycollection.json'):
     # GDAL environment variables for better performance
@@ -161,7 +162,6 @@ def get_stats(ts_ds):
     dates_df = dates_df.dropna()
     
     dates_mls_df = dates_df.filter(['elevation','dah','runoff_dates','ripening_dates'])
-    dates_mls_df.corr()
     
     predictors = np.append(np.ones_like([dates_df['runoff_dates']]).T,dates_mls_df.iloc[:,[0,1]].to_numpy(),axis=1)
     B,_,_,_ = scipy.linalg.lstsq(predictors, dates_mls_df.iloc[:,2])
@@ -170,8 +170,11 @@ def get_stats(ts_ds):
     predictors = np.append(np.ones_like([dates_df['runoff_dates']]).T,dates_mls_df.iloc[:,[0,1]].to_numpy(),axis=1)
     B,_,_,_ = scipy.linalg.lstsq(predictors, dates_mls_df.iloc[:,3])
     dates_df['ripening_prediction'] = predictors.dot(B)
-
-    return dates_df
+    
+    dates_gdf = gpd.GeoDataFrame(dates_df,geometry=gpd.points_from_xy(dates_df['x'],dates_df['y'],crs=ts_ds.rio.crs))
+    dates_gdf=dates_gdf.set_index(['y','x'])
+    
+    return dates_gdf
 
 
 
@@ -211,6 +214,41 @@ def plot_timeseries_by_elevation_bin(ts_ds,dem_ds,bin_size=100,ax=None,normalize
     ax.set_ylabel('Elevation [m]')
     return(ax)
 
+def plot_timeseries_by_dah_bin(ts_ds,dem_ds,bin_size=0.25,ax=None,normalize_bins=False):
+    if ax is None:
+        ax = plt.gca()
+    f = plt.gcf()
+    
+    dem_projected_ds = dem_ds.rio.reproject_match(ts_ds) # squeeze??
+    dem_projected_ds = dem_projected_ds.where(ts_ds!=np.nan) # here mask DEM by ts_ds
+    
+    bin_centers=list(np.arange(-1+bin_size/2,1,bin_size))
+    backscatter_full = []
+
+    for i,bin_center in enumerate(bin_centers):
+        ts_bin_ds = ts_ds.where(np.abs(dem_projected_ds - bin_center) < bin_size/2)
+        with warnings.catch_warnings(): #catches np.nanmean empty slices
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            backscatter_ts_for_bin = np.nanmean(ts_bin_ds.data.reshape(ts_bin_ds.shape[0],-1), axis=1) 
+        backscatter_full.append(list(backscatter_ts_for_bin))
+        
+    backscatter_df = pd.DataFrame(backscatter_full,index=bin_centers,columns=ts_ds.time)
+    
+    if normalize_bins == True:
+          backscatter_df = ((backscatter_df.T-backscatter_df.T.min())/(backscatter_df.T.max()-backscatter_df.T.min())).T
+    colors = ax.pcolormesh(bin_centers, pd.to_datetime(ts_ds.time), backscatter_df.T,cmap='inferno',edgecolors=(1.0, 1.0, 1.0, 0.3)) #,vmin=0,vmax=0.5
+    cbar = f.colorbar(colors,ax=ax,location='top',orientation='horizontal')
+    
+    if normalize_bins == False:
+        lab = 'Mean Backscatter [Watts]'
+    else:
+        lab = 'Normalized (DAH-wise) Backscatter'
+    
+    #cbar.ax.set_ylabel(lab, rotation=270, labelpad=15)
+    
+    ax.set_xlabel('Diurnal Anisotropic Heating Index')
+    ax.set_ylabel('Time')
+    return(ax)
 
 def plot_hyposometry(ts_ds,dem_ds,bin_size=100,ax=None):
     if ax is None:
@@ -226,18 +264,34 @@ def plot_hyposometry(ts_ds,dem_ds,bin_size=100,ax=None):
     ax.set_title('Hyposometry Plot')
     return(ax)
 
+
+def plot_dah_bins(ts_ds,dem_ds,bin_size=0.25,ax=None):
+    if ax is None:
+        ax = plt.gca()
+    f = plt.gcf()    
+    dem_projected_ds = dem_ds.rio.reproject_match(ts_ds) # squeeze??
+    dem_projected_ds = dem_projected_ds.where(ts_ds!=np.nan) # here mask DEM by ts_ds
+    bin_edges=list(np.arange(-1,1+bin_size,bin_size))
+    ax.hist(dem_projected_ds.squeeze().isel(time=0).to_numpy().ravel(),bins=bin_edges[::1],orientation='vertical',histtype='bar',ec='k')
+    ax.set_xlim([-1,1])
+    ax.set_ylabel('# of Pixels')
+    ax.set_xlabel('DAH')
+    ax.set_title('DAH Index Histogram')
+    return(ax)
+
+
 def plot_backscatter_ts_and_ndvi(ts_ds,ndvi_ds):
     frames = ts_ds
     frames_ndvi_all = ndvi_ds
     mins_info = frames.argmin(dim='time',skipna=False)
     f,ax=plt.subplots(3,2,figsize=(20,10))
-    frames[mins_info].time.dt.dayofyear.where(frames_ndvi_all.values<0.2).plot(ax=ax[0,0])
+    frames[mins_info].time.dt.dayofyear.where(frames_ndvi_all.values<0.2).plot(ax=ax[0,0],cmap='twilight')
     ax[0,0].set_title('Runoff Date w/ No Vegetation \n (NDVI < 0.2)')
-    frames[mins_info].time.dt.dayofyear.where(frames_ndvi_all.values>0.2).where(frames_ndvi_all.values<0.6).plot(ax=ax[1,0])
+    frames[mins_info].time.dt.dayofyear.where(frames_ndvi_all.values>0.2).where(frames_ndvi_all.values<0.6).plot(ax=ax[1,0],cmap='twilight')
     ax[1,0].set_title('Runoff Date w/ Sparse to Moderate Vegetation \n (0.2 < NDVI < 0.6)')
     #frames[mins_info].time.dt.dayofyear.where(frames_ndvi_all.values>0.4).where(frames_ndvi_all.values<0.6).plot(ax=ax[2,0])
     #ax[2,0].set_title('Runoff Date w/ Moderate Vegetation \n (0.4 < NDVI < 0.6)')
-    frames[mins_info].time.dt.dayofyear.where(frames_ndvi_all.values>0.6).plot(ax=ax[2,0])
+    frames[mins_info].time.dt.dayofyear.where(frames_ndvi_all.values>0.6).plot(ax=ax[2,0],cmap='twilight')
     ax[2,0].set_title('Runoff Date w/ Dense Vegetation \n (NDVI > 0.6)')
 
     ax[0,0].set_aspect('equal')
@@ -266,3 +320,41 @@ def plot_backscatter_ts_and_ndvi(ts_ds,ndvi_ds):
 
     plt.tight_layout()
     
+def find_closest_snotel(ts_ds):
+    
+    sites_df=pd.DataFrame.from_dict(ulmo.cuahsi.wof.get_sites('https://hydroportal.cuahsi.org/Snotel/cuahsi_1_1.asmx?WSDL'),orient='index').astype({'elevation_m': 'float'})
+    locations = pd.json_normalize(sites_df['location']).astype({'latitude': 'float','longitude':'float'})
+    sites_gdf = gpd.GeoDataFrame(sites_df[['code','name','elevation_m']], geometry=gpd.points_from_xy(locations.longitude, locations.latitude))
+    
+    sites_gdf = sites_gdf.set_crs('epsg:4326')
+    sites_gdf = sites_gdf.to_crs(ts_ds.crs)
+    
+    sites_gdf['distance_km'] = sites_gdf.distance(shapely.geometry.box(*ts_ds.rio.bounds()))/1000
+    sites_gdf = sites_gdf.sort_values(by='distance_km')
+    sites_gdf = sites_gdf[sites_gdf['distance_km'].notnull()]
+
+    return sites_gdf
+
+def plot_closest_snotel(ts_ds,distance_cutoff=30,ax=None):
+    
+    if ax is None:
+        ax = plt.gca()
+    f = plt.gcf()    
+    
+    sites_gdf = find_closest_snotel(ts_ds) 
+    
+    ts_ds.isel(time=0).plot(ax=ax,vmax=1.0,cmap='gray',add_colorbar=False)
+    sites_gdf = sites_gdf[sites_gdf['distance_km']<distance_cutoff]
+    color = sites_gdf.plot(column='distance_km',ax=ax,vmax=distance_cutoff,legend=True,cmap='viridis_r',legend_kwds={'label':'Distance from Study Site [km]','orientation':'vertical','fraction':0.0466,'pad':0.02})
+    ax.set_xlim([point.x-1000*distance_cutoff*1.5,point.x+1000*distance_cutoff*1.5])
+    ax.set_ylim([point.y-1000*distance_cutoff*1.5,point.y+1000*distance_cutoff*1.5])
+
+    ctx.add_basemap(ax=ax, crs=sites_gdf.crs, source=ctx.providers.Stamen.Terrain)
+
+    ax.set_title('SNOTEL Sites Around Study Site')
+    plt.tight_layout(rect=[0, 0, 0.9, 0.90])
+
+    for x, y, label1, label2, label3 in zip(sites_gdf.geometry.x, sites_gdf.geometry.y, sites_gdf.name, sites_gdf.code, sites_gdf.distance_km):
+        ax.annotate(f'{label1} \n{label2} \n{label3:.2f} km', xy=(x, y), xytext=(15, -30), textcoords="offset points", fontsize=10,bbox=dict(facecolor='yellow', edgecolor='black', boxstyle='round,pad=0.5'))
+    
+    return(ax)
