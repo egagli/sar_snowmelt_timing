@@ -346,8 +346,9 @@ def plot_closest_snotel(ts_ds,distance_cutoff=30,ax=None):
     ts_ds.isel(time=0).plot(ax=ax,vmax=1.0,cmap='gray',add_colorbar=False)
     sites_gdf = sites_gdf[sites_gdf['distance_km']<distance_cutoff]
     color = sites_gdf.plot(column='distance_km',ax=ax,vmax=distance_cutoff,legend=True,cmap='viridis_r',legend_kwds={'label':'Distance from Study Site [km]','orientation':'vertical','fraction':0.0466,'pad':0.02})
-    ax.set_xlim([point.x-1000*distance_cutoff*1.5,point.x+1000*distance_cutoff*1.5])
-    ax.set_ylim([point.y-1000*distance_cutoff*1.5,point.y+1000*distance_cutoff*1.5])
+    minx, miny, maxx, maxy = ts_ds.rio.bounds()
+    ax.set_xlim([minx-1000*distance_cutoff*1.2,maxx+1000*distance_cutoff*1.2])
+    ax.set_ylim([miny-1000*distance_cutoff*1.2,maxy+1000*distance_cutoff*1.2])
 
     ctx.add_basemap(ax=ax, crs=sites_gdf.crs, source=ctx.providers.Stamen.Terrain)
 
