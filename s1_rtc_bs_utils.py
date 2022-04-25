@@ -359,3 +359,43 @@ def plot_closest_snotel(ts_ds,distance_cutoff=30,ax=None):
         ax.annotate(f'{label1} \n{label2} \n{label3:.2f} km', xy=(x, y), xytext=(15, -30), textcoords="offset points", fontsize=10,bbox=dict(facecolor='yellow', edgecolor='black', boxstyle='round,pad=0.5'))
     
     return(ax)
+
+def get_snotel(sitecode, variablecode='SNOTEL:SNWD_D', start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d')):
+    
+    wsdlurl = 'https://hydroportal.cuahsi.org/Snotel/cuahsi_1_1.asmx?WSDL'
+    #print(ulmo.cuahsi.wof.get_site_info(wsdlurl, sitecode)['series'].keys())
+
+    #print(sitecode, variablecode, start_date, end_date)
+    values_df = None
+    try:
+        #Request data from the server
+        site_values = ulmo.cuahsi.wof.get_values(wsdlurl, sitecode, variablecode, start=start_date, end=end_date)
+        #Convert to a Pandas DataFrame   
+        values_df = pd.DataFrame.from_dict(site_values['values'])
+        #Parse the datetime values to Pandas Timestamp objects
+        values_df['datetime'] = pd.to_datetime(values_df['datetime'], utc=True)
+        #Set the DataFrame index to the Timestamps
+        values_df = values_df.set_index('datetime')
+        #Convert values to float and replace -9999 nodata values with NaN
+        values_df['value'] = pd.to_numeric(values_df['value']).replace(-9999, np.nan)
+        #Remove any records flagged with lower quality
+        values_df = values_df[values_df['quality_control_level_code'] == '1']
+    except:
+        print("Unable to fetch %s" % variablecode)
+
+    return values_df
+
+def get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=30,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d')):
+    
+    sites_df = find_closest_snotel(ts_ds)
+    sites_df = sites_df[sites_df['distance_km']<distance_cutoff]
+    
+    values_dict = {}
+    
+    for site_code in sites_df['code']:
+        new_site = get_snotel(f'SNOTEL:{site_code}', variable_code,start_date=start_date, end_date=end_date)
+        values_dict[site_code] = new_site['value']
+        
+    site_data_df = pd.DataFrame.from_dict(values_dict)
+    
+    return site_data_df
