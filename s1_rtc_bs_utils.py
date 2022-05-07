@@ -23,6 +23,20 @@ import scipy
 import contextily as ctx
 
 def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='gamma0_vv',collection='mycollection.json'):
+    '''
+    Returns a Sentinel-1 SAR backscatter xarray dataset using STAC data from Indigo over the given time and bounding box.
+
+            Parameters:
+                    bbox_gdf (geopandas GeoDataframe): geodataframe bounding box
+                    start_time (str): start time of returned data 'YYYY-MM-DD'
+                    end_time (str): end time of returned data 'YYYY-MM-DD'
+                    orbit_direction (str): orbit direction of S1--can be all, ascending, or decending
+                    polarization (str): SAR polarization, use gamma0_vv
+                    collection (str): points to json collection, will be different for each MGRS square
+
+            Returns:
+                    scenes (xarray dataset): xarray stack of all scenes in the specified spatio-temporal window
+    '''
     # GDAL environment variables for better performance
     os.environ['AWS_REGION']='us-west-2'
     os.environ['GDAL_DISABLE_READDIR_ON_OPEN']='EMPTY_DIR' 
@@ -44,11 +58,22 @@ def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().s
         scenes = scenes
     else:
         scenes = scenes.where(scenes.coords['sat:orbit_state']==orbit_direction,drop=True)
-    return(scenes)
+    return scenes
 
-def get_median_ndvi(ds,start_time='2020-07-30',end_time='2020-09-09'):
+def get_median_ndvi(ts_ds,start_time='2020-07-30',end_time='2020-09-09'):
+    '''
+    Returns the median ndvi of the area covered by a given xarray dataset using Sentinel 2 imagery given a specific temporal window. Good for building an ndvi mask.
+
+            Parameters:
+                    ts_ds (xarray dataset): the area we will return the median ndvi over
+                    start_time (str): start time of returned data 'YYYY-MM-DD'
+                    end_time (str): end time of returned data 'YYYY-MM-DD'
+
+            Returns:
+                    frames_ndvi_compute (xarray dataset): computed ndvi median of the Sentinel 2 stack, reprojected to the same grid as the input dataset
+    '''
     # go from ds to lat lon here
-    ds_4326 = ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
+    ds_4326 = ts_ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
     box = shapely.geometry.box(*ds_4326.rio.bounds())
     bbox_gdf = gpd.GeoDataFrame(index=[0], crs='epsg:4326', geometry=[box])
     # must be lat lot bounding box
@@ -79,37 +104,37 @@ def get_median_ndvi(ds,start_time='2020-07-30',end_time='2020-09-09'):
     time_slice_ndvi = slice(start_time,end_time)
     scenes_ndvi = ndvi.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sel(time=time_slice_ndvi).median("time", keep_attrs=True)
     scenes_ndvi = scenes_ndvi.rio.write_crs(stack.rio.crs)
-    frames_ndvi_compute = scenes_ndvi.rio.reproject_match(ds).compute()
-    return(frames_ndvi_compute)
+    frames_ndvi_compute = scenes_ndvi.rio.reproject_match(ts_ds).compute()
+    return frames_ndvi_compute
 
-def get_py3dep_dem(ds):
-    ds_4326 = ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
+def get_py3dep_dem(ts_ds):
+    ds_4326 = ts_ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
     bbox = ds_4326.rio.bounds()
     dem = py3dep.get_map("DEM", bbox, resolution=10, geo_crs="epsg:4326", crs="epsg:3857")
     dem.name = "dem"
     dem.attrs["units"] = "meters"
-    dem_reproject = dem.rio.reproject_match(ds) 
+    dem_reproject = dem.rio.reproject_match(ts_ds) 
     return dem_reproject
 
-def get_py3dep_aspect(ds):
-    ds_4326 = ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
+def get_py3dep_aspect(ts_ds):
+    ds_4326 = ts_ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
     bbox = ds_4326.rio.bounds()
     dem = py3dep.get_map("Aspect Degrees", bbox, resolution=10, geo_crs="epsg:4326", crs="epsg:3857")
     dem.name = "aspect"
     dem.attrs["units"] = "degrees"
-    dem_reproject = dem.rio.reproject_match(ds)
+    dem_reproject = dem.rio.reproject_match(ts_ds)
     return dem_reproject
 
-def get_py3dep_slope(ds):
-    ds_4326 = ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
+def get_py3dep_slope(ts_ds):
+    ds_4326 = ts_ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
     bbox = ds_4326.rio.bounds()
     dem = py3dep.get_map("Slope Degrees", bbox, resolution=10, geo_crs="epsg:4326", crs="epsg:3857")
     dem.name = "slope"
     dem.attrs["units"] = "degrees"
-    dem_reproject = dem.rio.reproject_match(ds) 
+    dem_reproject = dem.rio.reproject_match(ts_ds) 
     return dem_reproject
 
-def get_dah(ds):
+def get_dah(ts_ds):
     # Diurnal Anisotropic Heating Index [Böhner and Antonić, 2009]
     # https://www.sciencedirect.com/science/article/abs/pii/S0166248108000081
     # DAH = cos(alpha_max-alpha)*arctan(beta) where alpha_max is slope aspect 
@@ -117,10 +142,10 @@ def get_dah(ds):
     # in radians. adpated from: https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2017WR020799
     # https://avalanche.org/avalanche-encyclopedia/aspect/
     alpha_max = 202.5
-    aspect = get_py3dep_aspect(ds)
-    slope = get_py3dep_slope(ds)
+    aspect = get_py3dep_aspect(ts_ds)
+    slope = get_py3dep_slope(ts_ds)
     DAH = np.cos(np.deg2rad(alpha_max-aspect))*np.arctan(np.deg2rad(slope))
-    DAH_reproject = DAH.rio.reproject_match(ds)
+    DAH_reproject = DAH.rio.reproject_match(ts_ds)
     return DAH_reproject
 
 #def get_runoff_onset(ts_ds):
@@ -212,7 +237,7 @@ def plot_timeseries_by_elevation_bin(ts_ds,dem_ds,bin_size=100,ax=None,normalize
 
     ax.set_xlabel('Time')
     ax.set_ylabel('Elevation [m]')
-    return(ax)
+    return ax
 
 def plot_timeseries_by_dah_bin(ts_ds,dem_ds,bin_size=0.25,ax=None,normalize_bins=False):
     if ax is None:
@@ -248,7 +273,7 @@ def plot_timeseries_by_dah_bin(ts_ds,dem_ds,bin_size=0.25,ax=None,normalize_bins
     
     ax.set_xlabel('Diurnal Anisotropic Heating Index')
     ax.set_ylabel('Time')
-    return(ax)
+    return ax
 
 def plot_hyposometry(ts_ds,dem_ds,bin_size=100,ax=None):
     if ax is None:
@@ -262,7 +287,7 @@ def plot_hyposometry(ts_ds,dem_ds,bin_size=100,ax=None):
     ax.set_xlabel('# of Pixels')
     ax.set_ylabel('Elevation [m]')
     ax.set_title('Hyposometry Plot')
-    return(ax)
+    return ax
 
 
 def plot_dah_bins(ts_ds,dem_ds,bin_size=0.25,ax=None):
@@ -277,7 +302,7 @@ def plot_dah_bins(ts_ds,dem_ds,bin_size=0.25,ax=None):
     ax.set_ylabel('# of Pixels')
     ax.set_xlabel('DAH')
     ax.set_title('DAH Index Histogram')
-    return(ax)
+    return ax
 
 
 def plot_backscatter_ts_and_ndvi(ts_ds,ndvi_ds):
@@ -358,9 +383,9 @@ def plot_closest_snotel(ts_ds,distance_cutoff=30,ax=None):
     for x, y, label1, label2, label3 in zip(sites_gdf.geometry.x, sites_gdf.geometry.y, sites_gdf.name, sites_gdf.code, sites_gdf.distance_km):
         ax.annotate(f'{label1} \n{label2} \n{label3:.2f} km', xy=(x, y), xytext=(15, -30), textcoords="offset points", fontsize=10,bbox=dict(facecolor='yellow', edgecolor='black', boxstyle='round,pad=0.5'))
     
-    return(ax)
+    return ax
 
-def get_snotel(sitecode, variablecode='SNOTEL:SNWD_D', start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d')):
+def get_snotel(site_code, variable_code='SNOTEL:SNWD_D', start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d')):
     
     wsdlurl = 'https://hydroportal.cuahsi.org/Snotel/cuahsi_1_1.asmx?WSDL'
     #print(ulmo.cuahsi.wof.get_site_info(wsdlurl, sitecode)['series'].keys())
@@ -369,7 +394,7 @@ def get_snotel(sitecode, variablecode='SNOTEL:SNWD_D', start_date='1900-01-01', 
     values_df = None
     try:
         #Request data from the server
-        site_values = ulmo.cuahsi.wof.get_values(wsdlurl, sitecode, variablecode, start=start_date, end=end_date)
+        site_values = ulmo.cuahsi.wof.get_values(wsdlurl, site_code, variable_code, start=start_date, end=end_date)
         #Convert to a Pandas DataFrame   
         values_df = pd.DataFrame.from_dict(site_values['values'])
         #Parse the datetime values to Pandas Timestamp objects
@@ -381,7 +406,7 @@ def get_snotel(sitecode, variablecode='SNOTEL:SNWD_D', start_date='1900-01-01', 
         #Remove any records flagged with lower quality
         values_df = values_df[values_df['quality_control_level_code'] == '1']
     except:
-        print("Unable to fetch %s" % variablecode)
+        print("Unable to fetch %s" % variable_code)
 
     return values_df
 
@@ -399,3 +424,104 @@ def get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=
     site_data_df = pd.DataFrame.from_dict(values_dict)
     
     return site_data_df
+
+def get_s2_ndsi(ts_ds):
+    '''
+    Returns the ndsi time series of the area covered by a given xarray dataset using Sentinel 2 imagery
+
+            Parameters:
+                    ts_ds (xarray dataset): the area we will return the median ndsi over
+
+            Returns:
+                    scenes_ndsi_compute (xarray dataset): computed ndsi time series with same spatial grid and temporal bounds as as the input dataset
+    '''
+    # go from ds to lat lon here
+    ds_4326 = ts_ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
+    box = shapely.geometry.box(*ds_4326.rio.bounds())
+    bbox_gdf = gpd.GeoDataFrame(index=[0], crs='epsg:4326', geometry=[box])
+    # must be lat lot bounding box
+    lower_lon, upper_lat, upper_lon, lower_lat = bbox_gdf.bounds.values[0]
+    #lower_lon, upper_lat, upper_lon, lower_lat = gdf.geometry.total_bounds
+
+    lon = (lower_lon + upper_lon)/2
+    lat = (lower_lat + upper_lat)/2
+    
+    start_time = pd.to_datetime(ts_ds.time[0].values).strftime('%Y-%m-%d')
+    end_time = pd.to_datetime(ts_ds.time[-1].values).strftime('%Y-%m-%d')
+    
+    URL = "https://earth-search.aws.element84.com/v0"
+    catalog = pystac_client.Client.open(URL)
+    
+    items = catalog.search(
+    intersects=dict(type="Point", coordinates=[lon, lat]),
+    collections=["sentinel-s2-l2a-cogs"],
+    datetime=f"{start_time}/{end_time}").get_all_items()
+    
+    stack = stackstac.stack(items)
+    bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
+    xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
+
+    cloud_cover_threshold = 20
+    lowcloud = stack[stack["eo:cloud_cover"] < cloud_cover_threshold]
+    lowcloud = lowcloud
+    #lowcloud = lowcloud.drop_duplicates("time","first")
+    # snow.groupby(snow.time.dt.date).mean() use this for groupby date
+    vir, swir = lowcloud.sel(band="B03"), lowcloud.sel(band="B11")
+    ndsi = (vir-swir)/(vir+swir)
+    
+    time_slice = slice(start_time,end_time)
+    scenes_ndsi = ndsi.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sel(time=time_slice)
+    scenes_ndsi = scenes_ndsi.rio.write_crs(stack.rio.crs)
+    scenes_ndsi_compute = scenes_ndsi.rio.reproject_match(ts_ds).resample(time='1D',skipna=True).mean("time", keep_attrs=True).dropna('time',how='all')#.compute()
+    scenes_ndsi_compute = scenes_ndsi_compute.where(ts_ds.isel(time=0)>0)
+    return scenes_ndsi_compute
+
+def get_s2_rgb(ts_ds):
+    '''
+    Returns the rgb time series of the area covered by a given xarray dataset using Sentinel 2 imagery
+
+            Parameters:
+                    ts_ds (xarray dataset): the area we will return the rgb over
+
+            Returns:
+                    scenes_rgb_compute (xarray dataset): computed rgb time series with same spatial grid and temporal bounds as as the input dataset
+    '''
+    # go from ds to lat lon here
+    ds_4326 = ts_ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
+    box = shapely.geometry.box(*ds_4326.rio.bounds())
+    bbox_gdf = gpd.GeoDataFrame(index=[0], crs='epsg:4326', geometry=[box])
+    # must be lat lot bounding box
+    lower_lon, upper_lat, upper_lon, lower_lat = bbox_gdf.bounds.values[0]
+    #lower_lon, upper_lat, upper_lon, lower_lat = gdf.geometry.total_bounds
+
+    lon = (lower_lon + upper_lon)/2
+    lat = (lower_lat + upper_lat)/2
+    
+    start_time = pd.to_datetime(ts_ds.time[0].values).strftime('%Y-%m-%d')
+    end_time = pd.to_datetime(ts_ds.time[-1].values).strftime('%Y-%m-%d')
+    
+    URL = "https://earth-search.aws.element84.com/v0"
+    catalog = pystac_client.Client.open(URL)
+    
+    items = catalog.search(
+    intersects=dict(type="Point", coordinates=[lon, lat]),
+    collections=["sentinel-s2-l2a-cogs"],
+    datetime=f"{start_time}/{end_time}").get_all_items()
+    
+    stack = stackstac.stack(items)
+    bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
+    xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
+
+    cloud_cover_threshold = 20
+    lowcloud = stack[stack["eo:cloud_cover"] < cloud_cover_threshold]
+    lowcloud = lowcloud
+    #lowcloud = lowcloud.drop_duplicates("time","first")
+    # snow.groupby(snow.time.dt.date).mean() use this for groupby date
+    rgb = lowcloud.sel(band=["B04","B03","B02"])
+    
+    time_slice = slice(start_time,end_time)
+    scenes_rgb = rgb.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sel(time=time_slice)
+    scenes_rgb = scenes_rgb.rio.write_crs(stack.rio.crs)
+    scenes_rgb_compute = scenes_rgb.resample(time='1W',skipna=True).mean("time", keep_attrs=True).dropna('time',how='all')#.compute()
+    
+    return scenes_rgb_compute
