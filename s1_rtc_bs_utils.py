@@ -168,9 +168,14 @@ def get_ripening_onset(ts_ds,orbit='ascending'): # fix this
     ripening_dates = ripening_dates.where(ts_ds.isel(time=0)!=9999)
     return ripening_dates
 
-def get_stats(ts_ds,dem=None,aspect=None,dah=None):
+def get_stats(ts_ds,dem=None,aspect=None,slope=None,dah=None):
     runoff_dates = get_runoff_onset(ts_ds)
-    ripening_dates = get_ripening_onset(ts_ds)
+    
+    if all(np.array(ts_ds.coords['sat:orbit_state']=='descending')):
+        ripening_dates = get_ripening_onset(ts_ds,orbit='descending')
+    else:
+        ripening_dates = get_ripening_onset(ts_ds)
+        
     if dem is None:
         dem_projected = get_py3dep_dem(ts_ds)
     else:
@@ -179,17 +184,22 @@ def get_stats(ts_ds,dem=None,aspect=None,dah=None):
         aspect_projected = get_py3dep_aspect(ts_ds)
     else:
         aspect_projected = aspect
+    if slope is None:
+        slope_projected = get_py3dep_slope(ts_ds)
+    else:
+        slope_projected = slope
     if dah is None:
         dah_projected = get_dah(ts_ds)
     else: 
         dah_projected = dah
-    dates_df = pd.DataFrame(columns=['x','y','elevation', 'aspect','aspect_rescale','dah','runoff_dates','ripening_dates'])
+        
+    dates_df = pd.DataFrame(columns=['x','y','elevation','aspect','slope','dah','runoff_dates','ripening_dates'])
     a1, a2 = np.meshgrid(dem_projected.indexes['x'],dem_projected.indexes['y'])
     dates_df['x'] = a1.reshape(-1)
     dates_df['y'] = a2.reshape(-1)
     dates_df['elevation'] = dem_projected.data.reshape(-1)
     dates_df['aspect'] = aspect_projected.data.reshape(-1)
-    dates_df['aspect_rescale'] = np.abs(aspect_projected.data.reshape(-1)-180)
+    dates_df['slope'] = slope_projected.data.reshape(-1)
     dates_df['dah'] = dah_projected.data.reshape(-1)
     dates_df['runoff_dates'] = runoff_dates.dt.dayofyear.data.reshape(-1)
     dates_df['ripening_dates'] = ripening_dates.dt.dayofyear.data.reshape(-1)
