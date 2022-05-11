@@ -168,12 +168,21 @@ def get_ripening_onset(ts_ds,orbit='ascending'): # fix this
     ripening_dates = ripening_dates.where(ts_ds.isel(time=0)!=9999)
     return ripening_dates
 
-def get_stats(ts_ds):
+def get_stats(ts_ds,dem=None,aspect=None,dah=None):
     runoff_dates = get_runoff_onset(ts_ds)
     ripening_dates = get_ripening_onset(ts_ds)
-    dem_projected = get_py3dep_dem(ts_ds)
-    aspect_projected = get_py3dep_aspect(ts_ds)
-    dah_projected = get_dah(ts_ds)
+    if dem is None:
+        dem_projected = get_py3dep_dem(ts_ds)
+    else:
+        dem_projected = dem
+    if aspect is None:
+        aspect_projected = get_py3dep_aspect(ts_ds)
+    else:
+        aspect_projected = aspect
+    if dah is None:
+        dah_projected = get_dah(ts_ds)
+    else: 
+        dah_projected = dah
     dates_df = pd.DataFrame(columns=['x','y','elevation', 'aspect','aspect_rescale','dah','runoff_dates','ripening_dates'])
     a1, a2 = np.meshgrid(dem_projected.indexes['x'],dem_projected.indexes['y'])
     dates_df['x'] = a1.reshape(-1)
