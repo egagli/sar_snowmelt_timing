@@ -429,7 +429,7 @@ def get_snotel(site_code, variable_code='SNOTEL:SNWD_D', start_date='1900-01-01'
 
     return values_df
 
-def get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=30,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d')):
+def get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=30,closest=False,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d')):
     
     sites_df = find_closest_snotel(ts_ds)
     sites_df = sites_df[sites_df['distance_km']<distance_cutoff]
@@ -439,6 +439,8 @@ def get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=
     for site_code in sites_df['code']:
         new_site = get_snotel(f'SNOTEL:{site_code}', variable_code,start_date=start_date, end_date=end_date)
         values_dict[site_code] = new_site['value']
+        if closest == True:
+            break
         
     site_data_df = pd.DataFrame.from_dict(values_dict)
     
@@ -544,3 +546,7 @@ def get_s2_rgb(ts_ds):
     scenes_rgb_compute = scenes_rgb.resample(time='1W',skipna=True).mean("time", keep_attrs=True).dropna('time',how='all')#.compute()
     
     return scenes_rgb_compute
+
+def plot_bs_ndsi_swe_precip(ts_ds):
+    snow = get_s2_ndsi(ts_ds)
+    
