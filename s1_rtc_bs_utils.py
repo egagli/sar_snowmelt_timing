@@ -371,7 +371,7 @@ def find_closest_snotel(ts_ds):
     sites_gdf = gpd.GeoDataFrame(sites_df[['code','name','elevation_m']], geometry=gpd.points_from_xy(locations.longitude, locations.latitude))
     
     sites_gdf = sites_gdf.set_crs('epsg:4326')
-    sites_gdf = sites_gdf.to_crs(ts_ds.crs)
+    sites_gdf = sites_gdf.to_crs(ts_ds.rio.crs)
     
     sites_gdf['distance_km'] = sites_gdf.distance(shapely.geometry.box(*ts_ds.rio.bounds()))/1000
     sites_gdf = sites_gdf.sort_values(by='distance_km')
@@ -547,6 +547,175 @@ def get_s2_rgb(ts_ds):
     
     return scenes_rgb_compute
 
-def plot_bs_ndsi_swe_precip(ts_ds):
-    snow = get_s2_ndsi(ts_ds)
+def plot_bs_ndsi_swe_precip(ts_ds,ax=None,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d')):
+    if ax is None:
+        ax = plt.gca()
+    f = plt.gcf()    
     
+    plt.style.use('seaborn-dark')
+
+    snwd_ax = ax.twinx()
+    precip_ax = ax.twinx()
+    ndsi_ax = ax.twinx()
+    
+    #host.set_xlim(0, 2)
+    #host.set_ylim(0, 2)
+    #par1.set_ylim(0, 4)
+    #par2.set_ylim(1, 65)
+    #snwd_ax.set_ylim(bottom=0)
+    snwd_ax.set_ylim([0,480])
+
+    
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Backscatter [Watts]")
+    snwd_ax.set_ylabel("Snow Depth / SWE [cm]")
+    precip_ax.set_ylabel("Precipitation [cm]")
+    ndsi_ax.set_ylabel("NDSI")
+
+    #bs_plot1, = ax.plot(ts_ds[ts_ds.coords['sat:orbit_state']=='ascending'].time,ts_ds[ts_ds.coords['sat:orbit_state']=='ascending'].mean(dim=['x','y']),color='red',label='Backscatter (Ascending)')
+    #bs_plot2, = ax.plot(ts_ds[ts_ds.coords['sat:orbit_state']=='descending'].time,ts_ds[ts_ds.coords['sat:orbit_state']=='descending'].mean(dim=['x','y']),color='orange',label='Backscatter (Descending)')
+    for orbit in np.unique(ts_ds.coords['sat:relative_orbit']):
+        direction = ts_ds[ts_ds.coords['sat:relative_orbit']==orbit]['sat:orbit_state'].values[0].capitalize()
+        ax.plot(ts_ds[ts_ds.coords['sat:relative_orbit']==orbit].time,ts_ds[ts_ds.coords['sat:relative_orbit']==orbit].mean(dim=['x','y']),label=f'Orbit {orbit} ({direction})')
+
+    snow = get_s2_ndsi(ts_ds)
+    ndsi_plot, = ndsi_ax.plot(snow.time,snow.mean(dim=['x','y']),color='black',label='NDSI')
+    snotel_snwd = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    snwd_plot = snwd_ax.scatter(snotel_snwd.index,2.54*snotel_snwd.iloc[:,0],color='blueviolet',alpha=0.7,label='Snow Depth')
+    
+    snotel_swe = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:WTEQ_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    swe_plot = snwd_ax.scatter(snotel_swe.index,2.54*snotel_swe.iloc[:,0],color='darkturquoise',alpha=0.7,label='SWE')
+    
+    #print(snotel_snwd)
+    #ax.scatter(x=snotel_snwd.index,y=snotel_snwd['value'],label='Snow Depth')
+    snotel_precip = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:PRCPSA_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    precip_plot = precip_ax.bar(snotel_precip.index,2.54*snotel_precip.iloc[:,0],color='blue',alpha=0.4,label='Precipitation')
+    lns = [ndsi_plot,snwd_plot,swe_plot,precip_plot]
+    ax.legend(handles=lns,loc='best')
+    
+    extra_legend = ax.legend(handles=lns,loc='upper center')
+    ax.legend(loc='upper right')
+    ax.add_artist(extra_legend)
+    #time_slice = slice('2015-01-01','2022-01-01')
+    #ax.set_xlim([time_slice.start,time_slice.stop])
+    
+    precip_ax.spines['right'].set_position(('outward', 60))
+    ndsi_ax.spines['left'].set_position(('outward', 60))
+    #ndsi_ax.yaxis.label.set_position(('outward', 60))
+    
+    ndsi_ax.spines["left"].set_visible(True)
+    ndsi_ax.yaxis.set_label_position('left') 
+    ndsi_ax.yaxis.set_ticks_position('left')
+    
+    #ax.yaxis.label.set_color(bs_plot1.get_color())
+    ndsi_ax.yaxis.label.set_color(ndsi_plot.get_color())
+    snwd_ax.yaxis.label.set_color('blueviolet')
+    precip_ax.yaxis.label.set_color('blue')
+    
+    ax.set_xlim([datetime.strptime(start_date,'%Y-%m-%d'),datetime.strptime(end_date,'%Y-%m-%d')])   
+    
+    ax.set_title('S1 Backscatter, S2 NDSI, SNOTEL Snow Depth, SWE, and Precipitation')
+    plt.tight_layout()
+    
+def plot_bs_ndsi_swe_precip_with_context(ts_ds,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d')):
+    
+    f,ax=plt.subplots(1,2,figsize=(20,6),gridspec_kw={'width_ratios': [1, 4]})
+    
+    plt.style.use('seaborn-dark')
+
+    snwd_ax = ax[1].twinx()
+    precip_ax = ax[1].twinx()
+    ndsi_ax = ax[1].twinx()
+    
+    #host.set_xlim(0, 2)
+    #host.set_ylim(0, 2)
+    #par1.set_ylim(0, 4)
+    #par2.set_ylim(1, 65)
+    #snwd_ax.set_ylim(bottom=0)
+    snwd_ax.set_ylim([0,480])
+
+    
+    ax[1].set_xlabel("Time")
+    ax[1].set_ylabel("Backscatter [Watts]")
+    snwd_ax.set_ylabel("Snow Depth / SWE [cm]")
+    precip_ax.set_ylabel("Precipitation [cm]")
+    ndsi_ax.set_ylabel("NDSI")
+
+    #bs_plot1, = ax[1].plot(ts_ds[ts_ds.coords['sat:orbit_state']=='ascending'].time,ts_ds[ts_ds.coords['sat:orbit_state']=='ascending'].mean(dim=['x','y']),color='red',label='Backscatter (Ascending)')
+    #bs_plot2, = ax[1].plot(ts_ds[ts_ds.coords['sat:orbit_state']=='descending'].time,ts_ds[ts_ds.coords['sat:orbit_state']=='descending'].mean(dim=['x','y']),color='orange',label='Backscatter (Descending)')
+
+    for orbit in np.unique(ts_ds.coords['sat:relative_orbit']):
+        direction = ts_ds[ts_ds.coords['sat:relative_orbit']==orbit]['sat:orbit_state'].values[0].capitalize()
+        ax[1].plot(ts_ds[ts_ds.coords['sat:relative_orbit']==orbit].time,ts_ds[ts_ds.coords['sat:relative_orbit']==orbit].mean(dim=['x','y']),label=f'Orbit {orbit} ({direction})')
+    #ax[1].legend()
+    
+    
+    snow = get_s2_ndsi(ts_ds)
+    ndsi_plot, = ndsi_ax.plot(snow.time,snow.mean(dim=['x','y']),color='black',label='NDSI')
+    snotel_snwd = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    snwd_plot = snwd_ax.scatter(snotel_snwd.index,2.54*snotel_snwd.iloc[:,0],color='blueviolet',alpha=0.7,label='Snow Depth')
+    
+    snotel_swe = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:WTEQ_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    swe_plot = snwd_ax.scatter(snotel_swe.index,2.54*snotel_swe.iloc[:,0],color='darkturquoise',alpha=0.7,label='SWE')
+    
+    #print(snotel_snwd)
+    #ax.scatter(x=snotel_snwd.index,y=snotel_snwd['value'],label='Snow Depth')
+    snotel_precip = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:PRCPSA_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    snotel_temp = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:TAVG_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    snotel_temp=(snotel_temp-32)/1.8
+    temp_precip_gdf = pd.concat([snotel_temp,snotel_precip],axis=1,join='inner')
+    temp_precip_gdf.set_axis(['Temperature','Precip'],axis=1,inplace=True)
+    conditions = [(temp_precip_gdf['Temperature'] <=0),(temp_precip_gdf['Temperature'] > 0)]
+    values = ['lightcoral', 'blue']
+    temp_precip_gdf['bar_color'] = np.select(conditions, values)
+    
+    
+    precip_plot = precip_ax.bar(temp_precip_gdf.index,2.54*temp_precip_gdf.iloc[:,1],color=temp_precip_gdf['bar_color'],alpha=0.4,label='Precipitation')
+    lns = [ndsi_plot,snwd_plot,swe_plot,precip_plot]
+    extra_legend = ax[1].legend(handles=lns,loc='upper center')
+    ax[1].legend(loc='upper right')
+    ax[1].add_artist(extra_legend)
+    #time_slice = slice('2015-01-01','2022-01-01')
+    #ax.set_xlim([time_slice.start,time_slice.stop])
+    
+    precip_ax.spines['right'].set_position(('outward', 60))
+    ndsi_ax.spines['left'].set_position(('outward', 60))
+    #ndsi_ax.yaxis.label.set_position(('outward', 60))
+    
+    ndsi_ax.spines["left"].set_visible(True)
+    ndsi_ax.yaxis.set_label_position('left') 
+    ndsi_ax.yaxis.set_ticks_position('left')
+    
+    #ax[1].yaxis.label.set_color(bs_plot1.get_color())
+    ndsi_ax.yaxis.label.set_color(ndsi_plot.get_color())
+    snwd_ax.yaxis.label.set_color('blueviolet')
+    precip_ax.yaxis.label.set_color('blue')
+    
+    ax[1].set_xlim([datetime.strptime(start_date,'%Y-%m-%d'),datetime.strptime(end_date,'%Y-%m-%d')])   
+    
+    plt.tight_layout()
+    
+    
+    sites_gdf = find_closest_snotel(ts_ds)
+    sites_gdf[sites_gdf['distance_km']==sites_gdf['distance_km'].min()].plot(ax=ax[0],color='red',marker='*')
+    
+    for x, y, label1, label2, label3, label4 in zip(sites_gdf.geometry.x, sites_gdf.geometry.y, sites_gdf.name, sites_gdf.code, sites_gdf.distance_km, sites_gdf.elevation_m):
+        ax[0].annotate(f'{label1} \n{label2} \nElevation:{label4:.0f} m \nProximity:{label3:.2f} km', xy=(x, y), xytext=(15, -30), textcoords="offset points", fontsize=10,bbox=dict(facecolor='yellow', edgecolor='black', boxstyle='round,pad=0.5'))
+        break
+    
+    minx, miny, maxx, maxy = ts_ds.rio.bounds()
+    distance_cutoff=6
+
+    
+    ts_ds.isel(time=0).plot(ax=ax[0],vmax=1.0,cmap='gray',add_colorbar=False)
+    
+    ax[0].set_xlim([minx-1000*distance_cutoff*1.2,maxx+1000*distance_cutoff*1.2])
+    ax[0].set_ylim([miny-1000*distance_cutoff*1.2,maxy+1000*distance_cutoff*1.2])
+    
+    ctx.add_basemap(ax=ax[0], crs=ts_ds.rio.crs, source=ctx.providers.Stamen.Terrain)
+    ax[0].set_title('Area of Interest')
+    
+
+    
+    site_name = sites_gdf[sites_gdf['distance_km']==sites_gdf['distance_km'].min()]['code'].values[0]
+    ax[1].set_title(f'S1 Backscatter, S2 NDSI, {site_name} Snow Depth, SWE, and Precipitation')
