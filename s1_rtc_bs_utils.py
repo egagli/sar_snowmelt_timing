@@ -478,7 +478,10 @@ def get_s2_ndsi(ts_ds):
     collections=["sentinel-s2-l2a-cogs"],
     datetime=f"{start_time}/{end_time}").get_all_items()
     
-    stack = stackstac.stack(items)
+    #string = f'{ts_ds.rio.crs}'
+    #epsg_code = int(string[5:])
+
+    stack = stackstac.stack(items) #epsg=epsg_code
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
 
@@ -580,15 +583,15 @@ def plot_bs_ndsi_swe_precip(ts_ds,ax=None,start_date='1900-01-01', end_date=date
 
     snow = get_s2_ndsi(ts_ds)
     ndsi_plot, = ndsi_ax.plot(snow.time,snow.mean(dim=['x','y']),color='black',label='NDSI')
-    snotel_snwd = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    snotel_snwd = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=30,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
     snwd_plot = snwd_ax.scatter(snotel_snwd.index,2.54*snotel_snwd.iloc[:,0],color='blueviolet',alpha=0.7,label='Snow Depth')
     
-    snotel_swe = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:WTEQ_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    snotel_swe = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:WTEQ_D',distance_cutoff=30,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
     swe_plot = snwd_ax.scatter(snotel_swe.index,2.54*snotel_swe.iloc[:,0],color='darkturquoise',alpha=0.7,label='SWE')
     
     #print(snotel_snwd)
     #ax.scatter(x=snotel_snwd.index,y=snotel_snwd['value'],label='Snow Depth')
-    snotel_precip = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:PRCPSA_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    snotel_precip = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:PRCPSA_D',distance_cutoff=30,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
     precip_plot = precip_ax.bar(snotel_precip.index,2.54*snotel_precip.iloc[:,0],color='blue',alpha=0.4,label='Precipitation')
     lns = [ndsi_plot,snwd_plot,swe_plot,precip_plot]
     ax.legend(handles=lns,loc='best')
@@ -619,7 +622,7 @@ def plot_bs_ndsi_swe_precip(ts_ds,ax=None,start_date='1900-01-01', end_date=date
     
 def plot_bs_ndsi_swe_precip_with_context(ts_ds,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d')):
     
-    f,ax=plt.subplots(1,2,figsize=(20,6),gridspec_kw={'width_ratios': [1, 4]})
+    f,ax=plt.subplots(1,2,figsize=(25,5),gridspec_kw={'width_ratios': [1, 3]})
     
     plt.style.use('seaborn-dark')
 
@@ -652,16 +655,16 @@ def plot_bs_ndsi_swe_precip_with_context(ts_ds,start_date='1900-01-01', end_date
     
     snow = get_s2_ndsi(ts_ds)
     ndsi_plot, = ndsi_ax.plot(snow.time,snow.mean(dim=['x','y']),color='black',label='NDSI')
-    snotel_snwd = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    snotel_snwd = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=30,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
     snwd_plot = snwd_ax.scatter(snotel_snwd.index,2.54*snotel_snwd.iloc[:,0],color='blueviolet',alpha=0.7,label='Snow Depth')
     
-    snotel_swe = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:WTEQ_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    snotel_swe = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:WTEQ_D',distance_cutoff=30,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
     swe_plot = snwd_ax.scatter(snotel_swe.index,2.54*snotel_swe.iloc[:,0],color='darkturquoise',alpha=0.7,label='SWE')
     
     #print(snotel_snwd)
     #ax.scatter(x=snotel_snwd.index,y=snotel_snwd['value'],label='Snow Depth')
-    snotel_precip = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:PRCPSA_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
-    snotel_temp = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:TAVG_D',distance_cutoff=1.5,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    snotel_precip = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:PRCPSA_D',distance_cutoff=30,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
+    snotel_temp = get_closest_snotel_data(ts_ds,variable_code='SNOTEL:TAVG_D',distance_cutoff=30,closest=True,start_date='1900-01-01', end_date=datetime.today().strftime('%Y-%m-%d'))
     snotel_temp=(snotel_temp-32)/1.8
     temp_precip_gdf = pd.concat([snotel_temp,snotel_precip],axis=1,join='inner')
     temp_precip_gdf.set_axis(['Temperature','Precip'],axis=1,inplace=True)
@@ -707,7 +710,9 @@ def plot_bs_ndsi_swe_precip_with_context(ts_ds,start_date='1900-01-01', end_date
     distance_cutoff=6
 
     
-    ts_ds.isel(time=0).plot(ax=ax[0],vmax=1.0,cmap='gray',add_colorbar=False)
+    #ts_ds.isel(time=0).plot(ax=ax[0],vmax=1.0,cmap='gray',add_colorbar=False)
+    get_runoff_onset(ts_ds).dt.dayofyear.plot(ax=ax[0],cmap='twilight')
+
     
     ax[0].set_xlim([minx-1000*distance_cutoff*1.2,maxx+1000*distance_cutoff*1.2])
     ax[0].set_ylim([miny-1000*distance_cutoff*1.2,maxy+1000*distance_cutoff*1.2])
