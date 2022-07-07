@@ -252,7 +252,7 @@ def plot_timeseries_by_elevation_bin(ts_ds,dem_ds,bin_size=100,ax=None,normalize
     else:
         lab = 'Normalized (Elevation-wise) Backscatter'
     
-    cbar.ax.set_ylabel(lab, rotation=270, labelpad=15)
+    cbar.ax.set_ylabel(lab, rotation=90, labelpad=15)
 
     ax.set_xlabel('Time')
     ax.set_ylabel('Elevation [m]')
