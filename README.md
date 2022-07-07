@@ -5,3 +5,6 @@ This repository contains notebooks and tools to identify snowmelt timing using t
 ![Mt  Rainier_bigfig (5)](https://user-images.githubusercontent.com/67975937/177889453-1f25bf2d-c430-43ba-940e-6dd5545b42b0.png)
 
 <img width="1358" alt="timeseries" src="https://user-images.githubusercontent.com/67975937/177890042-b788c2be-130a-463d-a24f-7bbd8d4bc4df.png">
+
+[agu_poster_48x36.pdf](https://github.com/egagli/sar_snow_melt_timing/files/9067931/agu_poster_48x36.pdf)
+
