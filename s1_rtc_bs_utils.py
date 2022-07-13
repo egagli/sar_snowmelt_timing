@@ -83,7 +83,7 @@ def plot_sentinel1_acquisitons(ts_ds,ax=None,start_date='2015-01-01',end_date=da
     
     ax.legend()
     
-    if start_time != '2015-01-01':
+    if start_date != '2015-01-01':
         ax.set_xlim([start_date,end_date])
         
     ax.set_ylim([0,200])
