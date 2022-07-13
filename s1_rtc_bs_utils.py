@@ -70,7 +70,7 @@ def plot_sentinel1_acquisitons(ts_ds,ax=None,start_time='2015-01-01',end_time=da
     asc = ts_ds[ts_ds.coords['sat:orbit_state']=='ascending']
     desc = ts_ds[ts_ds.coords['sat:orbit_state']=='descending']
 
-    f,ax=plt.subplots(figsize=(30,7))
+    #f,ax=plt.subplots(figsize=(30,7))
                 
     ax.scatter(np.array(asc.time),asc['sat:relative_orbit'],label='Ascending',c='red')
     ax.scatter(np.array(desc.time),desc['sat:relative_orbit'],label='Descending',c='blue')
