@@ -61,7 +61,7 @@ def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().s
     return scenes
 
 
-def plot_sentinel1_acquisitons(ts_ds,ax=None,start_time='2015-01-01',end_time=datetime.today().strftime('%Y-%m-%d')):
+def plot_sentinel1_acquisitons(ts_ds,ax=None,start_date='2015-01-01',end_date=datetime.today().strftime('%Y-%m-%d')):
     
     if ax is None:
         ax = plt.gca()
@@ -84,7 +84,7 @@ def plot_sentinel1_acquisitons(ts_ds,ax=None,start_time='2015-01-01',end_time=da
     ax.legend()
     
     if start_time != '2015-01-01':
-        ax.set_xlim([start_time,end_time])
+        ax.set_xlim([start_date,end_date])
         
     ax.set_ylim([0,200])
     ax.set_title('Sentinel-1 Relative Orbits')
