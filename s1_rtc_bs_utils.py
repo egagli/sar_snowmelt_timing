@@ -60,6 +60,37 @@ def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().s
         scenes = scenes.where(scenes.coords['sat:orbit_state']==orbit_direction,drop=True)
     return scenes
 
+
+def plot_sentinel1_acquisitons(ts_ds,ax=None,start_time='2015-01-01',end_time=datetime.today().strftime('%Y-%m-%d')):
+    
+    if ax is None:
+        ax = plt.gca()
+    f = plt.gcf()
+    
+    asc = ts_ds[ts_ds.coords['sat:orbit_state']=='ascending']
+    desc = ts_ds[ts_ds.coords['sat:orbit_state']=='descending']
+
+    f,ax=plt.subplots(figsize=(30,7))
+                
+    ax.scatter(np.array(asc.time),asc['sat:relative_orbit'],label='Ascending',c='red')
+    ax.scatter(np.array(desc.time),desc['sat:relative_orbit'],label='Descending',c='blue')
+
+    for i, label in enumerate(list(pd.to_datetime(asc.time.values).strftime('%Y-%m-%d \n %H:%M:%S'))):
+        plt.annotate(label, (asc.time.values[i], asc['sat:relative_orbit'][i]),fontsize=8,rotation=45)
+    
+    for i, label in enumerate(list(pd.to_datetime(desc.time.values).strftime('%Y-%m-%d \n%H:%M:%S'))):
+        plt.annotate(label, (desc.time.values[i], desc['sat:relative_orbit'][i]),fontsize=8,rotation=45)
+    
+    ax.legend()
+    
+    if start_time != '2015-01-01':
+        ax.set_xlim([start_time,end_time])
+        
+    ax.set_ylim([0,200])
+    ax.set_title('Sentinel-1 Relative Orbits')
+    plt.tight_layout()
+
+
 def get_median_ndvi(ts_ds,start_time='2020-07-30',end_time='2020-09-09'):
     '''
     Returns the median ndvi of the area covered by a given xarray dataset using Sentinel 2 imagery given a specific temporal window. Good for building an ndvi mask.
@@ -91,7 +122,14 @@ def get_median_ndvi(ts_ds,start_time='2020-07-30',end_time='2020-09-09'):
     collections=["sentinel-s2-l2a-cogs"],
     datetime=f"{start_time}/{end_time}").get_all_items()
     
-    stack = stackstac.stack(items)
+    string = f'{ts_ds.rio.crs}'
+    epsg_code = int(string[5:])
+    
+    stack = stackstac.stack(items,epsg=epsg_code)
+    
+    if np.unique(stack['proj:epsg']).size>1:
+        stack = stack[stack['proj:epsg']!=stack['epsg']]
+    
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
 
@@ -100,6 +138,14 @@ def get_median_ndvi(ts_ds,start_time='2020-07-30',end_time='2020-09-09'):
 
     nir, red, = lowcloud.sel(band="B08"), lowcloud.sel(band="B04")
     ndvi = (nir-red)/(nir+red)
+    
+    #if np.unique(ndvi['proj:epsg']).size>1:
+    #    try:
+    #        ndvi = ndvi[ndvi['proj:epsg']==ndvi['proj:epsg'][1]].compute()
+    #    except: 
+    #        ndvi = ndvi[ndvi['proj:epsg']==ndvi['proj:epsg'][0]].compute()
+    #else:
+    #    ndvi = ndvi.compute()
     
     time_slice_ndvi = slice(start_time,end_time)
     scenes_ndvi = ndvi.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sel(time=time_slice_ndvi).median("time", keep_attrs=True)
@@ -477,11 +523,15 @@ def get_s2_ndsi(ts_ds):
     intersects=dict(type="Point", coordinates=[lon, lat]),
     collections=["sentinel-s2-l2a-cogs"],
     datetime=f"{start_time}/{end_time}").get_all_items()
-    
-    #string = f'{ts_ds.rio.crs}'
-    #epsg_code = int(string[5:])
 
-    stack = stackstac.stack(items) #epsg=epsg_code
+    string = f'{ts_ds.rio.crs}'
+    epsg_code = int(string[5:])
+
+    stack = stackstac.stack(items,bounds_latlon=(bbox_gdf.bounds.values[0]),epsg=epsg_code) #epsg=epsg_code
+        
+    if np.unique(stack['proj:epsg']).size>1:
+        stack = stack[stack['proj:epsg']!=stack['epsg']]
+    
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
 
@@ -491,11 +541,21 @@ def get_s2_ndsi(ts_ds):
     #lowcloud = lowcloud.drop_duplicates("time","first")
     # snow.groupby(snow.time.dt.date).mean() use this for groupby date
     vir, swir = lowcloud.sel(band="B03"), lowcloud.sel(band="B11")
-    ndsi = (vir-swir)/(vir+swir)
+    ndsi = (vir-swir)/(vir+swir)    
     
+    #if np.unique(ndsi['proj:epsg']).size>1:
+    #    try:
+    #        ndsi = ndsi[ndsi['proj:epsg']==ndsi['proj:epsg'][1]].compute()
+    #    except: 
+    #        ndsi = ndsi[ndsi['proj:epsg']==ndsi['proj:epsg'][0]].compute()
+    #else:
+    #    ndsi = ndsi.compute()
+        
     time_slice = slice(start_time,end_time)
     scenes_ndsi = ndsi.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sel(time=time_slice)
     scenes_ndsi = scenes_ndsi.rio.write_crs(stack.rio.crs)
+    
+    
     scenes_ndsi_compute = scenes_ndsi.rio.reproject_match(ts_ds).resample(time='1D',skipna=True).mean("time", keep_attrs=True).dropna('time',how='all')#.compute()
     scenes_ndsi_compute = scenes_ndsi_compute.where(ts_ds.isel(time=0)>0)
     return scenes_ndsi_compute
@@ -532,7 +592,12 @@ def get_s2_rgb(ts_ds):
     collections=["sentinel-s2-l2a-cogs"],
     datetime=f"{start_time}/{end_time}").get_all_items()
     
-    stack = stackstac.stack(items)
+    stack = stackstac.stack(items,bounds_latlon=(bbox_gdf.bounds.values[0]))
+    
+    if np.unique(stack['proj:epsg']).size>1:
+        stack = stack[stack['proj:epsg']!=stack['epsg']]
+    
+    
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
 
@@ -547,6 +612,8 @@ def get_s2_rgb(ts_ds):
     scenes_rgb = rgb.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sel(time=time_slice)
     scenes_rgb = scenes_rgb.rio.write_crs(stack.rio.crs)
     scenes_rgb_compute = scenes_rgb.resample(time='1W',skipna=True).mean("time", keep_attrs=True).dropna('time',how='all')#.compute()
+    
+    # epsg problems?
     
     return scenes_rgb_compute
 
