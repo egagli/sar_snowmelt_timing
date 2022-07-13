@@ -61,7 +61,7 @@ def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().s
     return scenes
 
 
-def plot_sentinel1_acquisitons(ts_ds,ax=None,start_date='2015-01-01',end_date=datetime.today().strftime('%Y-%m-%d')):
+def plot_sentinel1_acquisitons(ts_ds,ax=None,start_date='2015-01-01',end_date=datetime.today().strftime('%Y-%m-%d'),textsize=8):
     
     if ax is None:
         ax = plt.gca()
@@ -76,10 +76,10 @@ def plot_sentinel1_acquisitons(ts_ds,ax=None,start_date='2015-01-01',end_date=da
     ax.scatter(np.array(desc.time),desc['sat:relative_orbit'],label='Descending',c='blue')
 
     for i, label in enumerate(list(pd.to_datetime(asc.time.values).strftime('%Y-%m-%d \n %H:%M:%S'))):
-        plt.annotate(label, (asc.time.values[i], asc['sat:relative_orbit'][i]),fontsize=8,rotation=45)
+        plt.annotate(label, (asc.time.values[i], asc['sat:relative_orbit'][i]),fontsize=textsize,rotation=45)
     
     for i, label in enumerate(list(pd.to_datetime(desc.time.values).strftime('%Y-%m-%d \n%H:%M:%S'))):
-        plt.annotate(label, (desc.time.values[i], desc['sat:relative_orbit'][i]),fontsize=8,rotation=45)
+        plt.annotate(label, (desc.time.values[i], desc['sat:relative_orbit'][i]),fontsize=textsize,rotation=45)
     
     ax.legend()
     
@@ -88,6 +88,7 @@ def plot_sentinel1_acquisitons(ts_ds,ax=None,start_date='2015-01-01',end_date=da
         
     ax.set_ylim([0,200])
     ax.set_title('Sentinel-1 Relative Orbits')
+    ax.set_xlabel('Datetime [UTC]')
     plt.tight_layout()
 
 
