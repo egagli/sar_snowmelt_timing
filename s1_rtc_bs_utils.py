@@ -557,7 +557,7 @@ def get_s2_ndsi(ts_ds):
     scenes_ndsi = scenes_ndsi.rio.write_crs(stack.rio.crs)
     
     
-    scenes_ndsi_compute = scenes_ndsi.rio.reproject_match(ts_ds).resample(time='1D',skipna=True).mean("time", keep_attrs=True).dropna('time',how='all')#.compute()
+    scenes_ndsi_compute = scenes_ndsi.rio.reproject_match(ts_ds).resample(time='1D',skipna=True).mean("time", keep_attrs=True).dropna('time',how='all')#.compute() #what was this for again?????
     scenes_ndsi_compute = scenes_ndsi_compute.where(ts_ds.isel(time=0)>0)
     return scenes_ndsi_compute
 
@@ -593,7 +593,10 @@ def get_s2_rgb(ts_ds):
     collections=["sentinel-s2-l2a-cogs"],
     datetime=f"{start_time}/{end_time}").get_all_items()
     
-    stack = stackstac.stack(items,bounds_latlon=(bbox_gdf.bounds.values[0]))
+    string = f'{ts_ds.rio.crs}'
+    epsg_code = int(string[5:])
+    
+    stack = stackstac.stack(items,bounds_latlon=(bbox_gdf.bounds.values[0]),epsg=epsg_code) #epsg=epsg_code
     
     if np.unique(stack['proj:epsg']).size>1:
         stack = stack[stack['proj:epsg']!=stack['epsg']]
@@ -612,7 +615,7 @@ def get_s2_rgb(ts_ds):
     time_slice = slice(start_time,end_time)
     scenes_rgb = rgb.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sel(time=time_slice)
     scenes_rgb = scenes_rgb.rio.write_crs(stack.rio.crs)
-    scenes_rgb_compute = scenes_rgb.resample(time='1W',skipna=True).mean("time", keep_attrs=True).dropna('time',how='all')#.compute()
+    scenes_rgb_compute = scenes_rgb.resample(time='1D',skipna=True).mean("time", keep_attrs=True).dropna('time',how='all')#.compute()
     
     # epsg problems?
     
