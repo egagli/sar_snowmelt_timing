@@ -1,3 +1,9 @@
+"""Library of functions to read and analyze Sentinel-1 C-band SAR data (RTC product from from https://registry.opendata.aws/sentinel-1-rtc-indigo/).
+
+Author: Eric Gagliano (egagli@uw.edu)
+Updated: 07/2022
+"""
+
 import pystac
 import pystac_client
 import stackstac
@@ -544,13 +550,6 @@ def get_s2_ndsi(ts_ds):
     vir, swir = lowcloud.sel(band="B03"), lowcloud.sel(band="B11")
     ndsi = (vir-swir)/(vir+swir)    
     
-    #if np.unique(ndsi['proj:epsg']).size>1:
-    #    try:
-    #        ndsi = ndsi[ndsi['proj:epsg']==ndsi['proj:epsg'][1]].compute()
-    #    except: 
-    #        ndsi = ndsi[ndsi['proj:epsg']==ndsi['proj:epsg'][0]].compute()
-    #else:
-    #    ndsi = ndsi.compute()
         
     time_slice = slice(start_time,end_time)
     scenes_ndsi = ndsi.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sel(time=time_slice)
@@ -558,8 +557,69 @@ def get_s2_ndsi(ts_ds):
     
     
     scenes_ndsi_compute = scenes_ndsi.rio.reproject_match(ts_ds).resample(time='1D',skipna=True).mean("time", keep_attrs=True).dropna('time',how='all')#.compute() #what was this for again?????
-    scenes_ndsi_compute = scenes_ndsi_compute.where(ts_ds.isel(time=0)>0)
+    #scenes_ndsi_compute = scenes_ndsi_compute.where(ts_ds.isel(time=0)>0)
     return scenes_ndsi_compute
+
+def get_s2_ndwi(ts_ds):
+    '''
+    Returns the ndsi time series of the area covered by a given xarray dataset using Sentinel 2 imagery
+
+            Parameters:
+                    ts_ds (xarray dataset): the area we will return the median ndsi over
+
+            Returns:
+                    scenes_ndsi_compute (xarray dataset): computed ndsi time series with same spatial grid and temporal bounds as as the input dataset
+    '''
+    # go from ds to lat lon here
+    ds_4326 = ts_ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
+    box = shapely.geometry.box(*ds_4326.rio.bounds())
+    bbox_gdf = gpd.GeoDataFrame(index=[0], crs='epsg:4326', geometry=[box])
+    # must be lat lot bounding box
+    lower_lon, upper_lat, upper_lon, lower_lat = bbox_gdf.bounds.values[0]
+    #lower_lon, upper_lat, upper_lon, lower_lat = gdf.geometry.total_bounds
+
+    lon = (lower_lon + upper_lon)/2
+    lat = (lower_lat + upper_lat)/2
+    
+    start_time = pd.to_datetime(ts_ds.time[0].values).strftime('%Y-%m-%d')
+    end_time = pd.to_datetime(ts_ds.time[-1].values).strftime('%Y-%m-%d')
+    
+    URL = "https://earth-search.aws.element84.com/v0"
+    catalog = pystac_client.Client.open(URL)
+    
+    items = catalog.search(
+    intersects=dict(type="Point", coordinates=[lon, lat]),
+    collections=["sentinel-s2-l2a-cogs"],
+    datetime=f"{start_time}/{end_time}").get_all_items()
+
+    string = f'{ts_ds.rio.crs}'
+    epsg_code = int(string[5:])
+
+    stack = stackstac.stack(items,bounds_latlon=(bbox_gdf.bounds.values[0]),epsg=epsg_code) #epsg=epsg_code
+        
+    if np.unique(stack['proj:epsg']).size>1:
+        stack = stack[stack['proj:epsg']!=stack['epsg']]
+    
+    bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
+    xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
+
+    cloud_cover_threshold = 20
+    lowcloud = stack[stack["eo:cloud_cover"] < cloud_cover_threshold]
+    lowcloud = lowcloud
+    #lowcloud = lowcloud.drop_duplicates("time","first")
+    # snow.groupby(snow.time.dt.date).mean() use this for groupby date
+    vir, swir = lowcloud.sel(band="B08"), lowcloud.sel(band="B12")
+    ndwi = (vir-swir)/(vir+swir)    
+    
+        
+    time_slice = slice(start_time,end_time)
+    scenes_ndwi = ndwi.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sel(time=time_slice)
+    scenes_ndwi = scenes_ndwi.rio.write_crs(stack.rio.crs)
+    
+    
+    scenes_ndwi_compute = scenes_ndwi.rio.reproject_match(ts_ds).resample(time='1D',skipna=True).mean("time", keep_attrs=True).dropna('time',how='all')#.compute() #what was this for again?????
+    #scenes_ndsi_compute = scenes_ndsi_compute.where(ts_ds.isel(time=0)>0)
+    return scenes_ndwi_compute
 
 def get_s2_rgb(ts_ds):
     '''
