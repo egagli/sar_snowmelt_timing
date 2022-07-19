@@ -1,0 +1,258 @@
+{
+  "type": "Feature",
+  "stac_version": "1.0.0",
+  "id": "S1B_20200628_13SBD_ASC",
+  "properties": {
+    "providers": [
+      {
+        "name": "ESA",
+        "roles": [
+          "licensor",
+          "producer"
+        ],
+        "url": "https://sentinel.esa.int/web/sentinel/missions/sentinel-1"
+      },
+      {
+        "name": "Indigo Ag Inc.",
+        "roles": [
+          "licensor",
+          "processor",
+          "host"
+        ],
+        "url": "https://registry.opendata.aws/sentinel-1-rtc-indigo",
+        "processing:level": "L3",
+        "processing:lineage": "https://sentinel-s1-rtc-indigo-docs.s3-us-west-2.amazonaws.com/methodology.html",
+        "processing:software": {
+          "S1TBX": "7.0.2"
+        }
+      }
+    ],
+    "constellation": "sentinel-1",
+    "platform": "sentinel-1b",
+    "instruments": [
+      "c-sar"
+    ],
+    "gsd": 20,
+    "start_datetime": "2020-06-28T01:01:43Z",
+    "end_datetime": "2020-06-28T01:02:08Z",
+    "created": "2022-06-30T20:49:33.795411Z",
+    "mgrs:utm_zone": "13",
+    "mgrs:latitude_band": "S",
+    "mgrs:grid_square": "BD",
+    "sentinel:mgrs": "13SBD",
+    "sentinel:product_ids": [
+      "S1B_IW_GRDH_1SDV_20200628T010143_20200628T010208_022227_02A2F2_1199"
+    ],
+    "sar:frequency_band": "C",
+    "sar:center_frequency": 5.405,
+    "sar:observation_direction": "right",
+    "sar:instrument_mode": "IW",
+    "sar:product_type": "RTC",
+    "sar:polarizations": [
+      "VV",
+      "VH"
+    ],
+    "sar:resolution_range": 20.3,
+    "sar:resolution_azimuth": 22.6,
+    "sar:pixel_spacing_range": 10,
+    "sar:pixel_spacing_azimuth": 10,
+    "sar:looks_equivalent_number": 4.3,
+    "sar:looks_range": 5,
+    "sar:looks_azimuth": 1,
+    "sat:orbit_state": "ascending",
+    "sat:relative_orbit": 151,
+    "sat:absolute_orbit": 22227,
+    "proj:epsg": 32613,
+    "proj:transform": [
+      20.0,
+      0.0,
+      199980.0,
+      0.0,
+      -20.0,
+      4400040.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "proj:shape": [
+      5490,
+      5490
+    ],
+    "datetime": "2020-06-28T01:01:55Z"
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -107.58917,
+          38.73218
+        ],
+        [
+          -107.58941,
+          38.73254
+        ],
+        [
+          -107.58966,
+          38.73307
+        ],
+        [
+          -107.5927,
+          38.74075
+        ],
+        [
+          -107.59371,
+          38.74343
+        ],
+        [
+          -107.59397,
+          38.74415
+        ],
+        [
+          -107.6238,
+          38.84871
+        ],
+        [
+          -107.62487,
+          38.85265
+        ],
+        [
+          -107.62541,
+          38.8548
+        ],
+        [
+          -107.79447,
+          39.52438
+        ],
+        [
+          -107.79533,
+          39.52833
+        ],
+        [
+          -107.81317,
+          39.61293
+        ],
+        [
+          -107.82323,
+          39.66548
+        ],
+        [
+          -107.82331,
+          39.66746
+        ],
+        [
+          -107.82179,
+          39.71596
+        ],
+        [
+          -107.2196,
+          39.72904
+        ],
+        [
+          -107.18865,
+          38.74037
+        ],
+        [
+          -107.58917,
+          38.73218
+        ]
+      ]
+    ]
+  },
+  "links": [
+    {
+      "rel": "license",
+      "href": "https://www.indigoag.com/forms/atlas-sentinel-license"
+    },
+    {
+      "rel": "root",
+      "href": "../../../../catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "collection",
+      "href": "../../../collection.json",
+      "type": "application/json",
+      "title": "Sentinel-1 RTC CONUS"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json",
+      "type": "application/json"
+    }
+  ],
+  "assets": {
+    "gamma0_vv": {
+      "href": "https://sentinel-s1-rtc-indigo.s3.us-west-2.amazonaws.com/tiles/RTC/1/IW/13/S/BD/2020/S1B_20200628_13SBD_ASC/Gamma0_VV.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Gamma0 VV backscatter",
+      "raster:bands": [
+        {
+          "nodata": 0,
+          "sampling": "area",
+          "data_type": "float32",
+          "statistics": {
+            "valid_percent": 39.378
+          }
+        }
+      ],
+      "roles": [
+        "data",
+        "gamma0"
+      ]
+    },
+    "gamma0_vh": {
+      "href": "https://sentinel-s1-rtc-indigo.s3.us-west-2.amazonaws.com/tiles/RTC/1/IW/13/S/BD/2020/S1B_20200628_13SBD_ASC/Gamma0_VH.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Gamma0 VH backscatter",
+      "raster:bands": [
+        {
+          "nodata": 0,
+          "sampling": "area",
+          "data_type": "float32",
+          "statistics": {
+            "valid_percent": 39.378
+          }
+        }
+      ],
+      "roles": [
+        "data",
+        "gamma0"
+      ]
+    },
+    "incidence": {
+      "href": "https://sentinel-s1-rtc-indigo.s3.us-west-2.amazonaws.com/tiles/RTC/1/IW/13/S/BD/2020/S1B_20200628_13SBD_ASC/local_incident_angle.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Local incidence angle",
+      "raster:bands": [
+        {
+          "nodata": 0,
+          "sampling": "area",
+          "data_type": "uint16",
+          "statistics": {
+            "valid_percent": 39.378
+          },
+          "unit": "degrees",
+          "scale": 0.01
+        }
+      ],
+      "roles": [
+        "data",
+        "local-incidence-angle"
+      ]
+    }
+  },
+  "bbox": [
+    -108.49898,
+    38.70997,
+    -107.18855,
+    39.72904
+  ],
+  "stac_extensions": [
+    "https://stac-extensions.github.io/sar/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.0.0/schema.json"
+  ],
+  "collection": "sentinel1-rtc-aws"
+}
