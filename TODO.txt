@@ -5,9 +5,9 @@ For ripening function, add option for 2-3dB threshold drop
 .aggregate_by_doy()
 .plot_gif()
 Add Mt. Shasta
-predict runoff with NDSI
+predict runoff with NDSI (correlate melt with landsat and calculate snowmelt timing for historical landsat catalog)
 break out strength of MLS corrs by year
-stream gauge data
+stream gauge data (look at martha creek riverbed, NEON-national ecological observation network)
 SNOTEL temperatures
 given geojson,give correct MGRS tile
 clean up env
