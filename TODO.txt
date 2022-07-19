@@ -1,3 +1,4 @@
+Change backscatter plots to dB
 Sentinel-2, use box instead of point for searching scenes so we have full images at each timestamp
 For ripening function, add option for 2-3dB threshold drop
 .melt_onset_elevation_line()
