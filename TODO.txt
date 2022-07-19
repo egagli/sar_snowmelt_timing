@@ -1,0 +1,10 @@
+Sentinel-2, use box instead of point for searching scenes so we have full images at each timestamp
+For ripening function, add option for 2-3dB threshold drop
+.melt_onset_elevation_line()
+.aggregate_by_doy()
+.plot_gif()
+Add Mt. Shasta
+predict runoff with NDSI
+break out strength of MLS corrs by year
+stream gauge data
+SNOTEL temperatures
