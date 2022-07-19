@@ -10,3 +10,4 @@ break out strength of MLS corrs by year
 stream gauge data
 SNOTEL temperatures
 given geojson,give correct MGRS tile
+clean up env
