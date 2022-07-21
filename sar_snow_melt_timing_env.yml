@@ -1,4 +1,4 @@
-name: aws-rtc-stac2
+name: aws-rtc-stac
 channels:
   - conda-forge
 dependencies:
