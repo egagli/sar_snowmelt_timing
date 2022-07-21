@@ -4,7 +4,7 @@ For ripening function, add option for 2-3dB threshold drop
 .melt_onset_elevation_line() levation-meltday curve for each year and each mountain
 .aggregate_by_doy()
 .plot_gif()
-Add Mt. Shasta
+Add Mt. Shasta, others? Glacier Peak, etc
 predict runoff with NDSI (correlate melt with landsat and calculate snowmelt timing for historical landsat catalog)
 break out strength of MLS corrs by year
 stream gauge data (look at martha creek riverbed, NEON-national ecological observation network)
