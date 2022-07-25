@@ -1,4 +1,4 @@
-# Tools for Exploring Snowmelt timing using Sentinel-1 C-band SAR
+# Tools for exploring snowmelt timing using Sentinel-1 C-band SAR
  
 This repository contains notebooks and tools to identify snowmelt timing using timeseries analysis of backscatter of Sentinel-1 C-band SAR. This toolbox makes use of [Analysis Ready Sentinel-1 Backscatter Imagery](https://registry.opendata.aws/sentinel-1-rtc-indigo/) (Sentinel-1 RTC data) hosted on AWS managed by Indigo Ag, Inc. Special thanks to [Scott Henderson](https://github.com/scottyhq) for his [aws-rtc-stac](https://github.com/relativeorbit/aws-rtc-stac) repository which allows the creation of static STAC catalogs used in this repository. 
 
@@ -38,7 +38,7 @@ This figure takes the runoff onset date map and zooms to each of the SnowEx Gran
 Finally, here is my Fall 2021 AGU Poster which summarizes my progress as of November 2021. Watch the narration of my poster [here](https://www.youtube.com/watch?v=S0ZCVqRnoJ8). Stay tuned for my next progress update! 
 ![agu_poster_48x36](https://user-images.githubusercontent.com/67975937/177890573-5ba07f43-cee6-4a11-ac1c-530738424946.png)
 
-Thanks for stopping by! Feel free to email me any questions at egagli@uw.edu.
+Thanks for stopping by! Feel free to email me for questions/collaborations at egagli@uw.edu.
 
 All my best,
 
