@@ -8,7 +8,7 @@ For ripening function, add option for 2-3dB threshold drop
 Add Mt. Shasta, others? Glacier Peak, etc
 predict runoff with NDSI (correlate melt with landsat and calculate snowmelt timing for historical landsat catalog)
 break out strength of MLS corrs by year
-stream gauge data (look at martha creek riverbed, NEON-national ecological observation network)
+stream gauge data (comment from david on gage and validation sentence of my abstract: Worth trying gage data.  USGS has an API to access, but you can just manually identify and download csv.  Biggest issue is going to be dams and other control - need to select watersheds carefully. Nooksack may be good place to start. Honestly, met station data might be the most useful in situ data to consider, as you should be able to tell when melting starts from air temps.)
 SNOTEL temperatures
 given geojson,give correct MGRS tile
 clean up env
