@@ -1,0 +1,45 @@
+{
+  "type": "Catalog",
+  "id": "10TFS",
+  "stac_version": "1.0.0",
+  "description": "Catalog of items from sentinel1-rtc-aws with id 10TFS",
+  "links": [
+    {
+      "rel": "root",
+      "href": "../../catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "child",
+      "href": "./2017/catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "child",
+      "href": "./2018/catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "child",
+      "href": "./2019/catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "child",
+      "href": "./2020/catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "child",
+      "href": "./2021/catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "parent",
+      "href": "../collection.json",
+      "type": "application/json",
+      "title": "Sentinel-1 RTC CONUS"
+    }
+  ],
+  "stac_extensions": []
+}

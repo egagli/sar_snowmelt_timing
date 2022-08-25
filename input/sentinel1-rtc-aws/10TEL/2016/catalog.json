@@ -1,0 +1,24 @@
+{
+  "type": "Catalog",
+  "id": "2016",
+  "stac_version": "1.0.0",
+  "description": "Catalog of items from 10TEL with id 2016",
+  "links": [
+    {
+      "rel": "root",
+      "href": "../../../catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "item",
+      "href": "./S1B_20161120_10TEL_ASC/S1B_20161120_10TEL_ASC.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json",
+      "type": "application/json"
+    }
+  ],
+  "stac_extensions": []
+}
