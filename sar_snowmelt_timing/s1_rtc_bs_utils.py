@@ -440,7 +440,8 @@ def plot_closest_snotel(ts_ds,distance_cutoff=30,ax=None):
     
     sites_gdf = find_closest_snotel(ts_ds) 
     
-    ts_ds.isel(time=0).plot(ax=ax,vmax=1.0,cmap='gray',add_colorbar=False)
+    ts_ds = 10*np.log10(ts_ds)
+    ts_ds.isel(time=0).plot(ax=ax,cmap='gray',vmin=-20,vmax=-1,add_colorbar=False)
     sites_gdf = sites_gdf[sites_gdf['distance_km']<distance_cutoff]
     color = sites_gdf.plot(column='distance_km',ax=ax,vmax=distance_cutoff,legend=True,cmap='viridis_r',legend_kwds={'label':'Distance from Study Site [km]','orientation':'vertical','fraction':0.0466,'pad':0.02})
     minx, miny, maxx, maxy = ts_ds.rio.bounds()
@@ -452,8 +453,12 @@ def plot_closest_snotel(ts_ds,distance_cutoff=30,ax=None):
     ax.set_title('SNOTEL Sites Around Study Site')
     plt.tight_layout(rect=[0, 0, 0.9, 0.90])
 
-    for x, y, label1, label2, label3 in zip(sites_gdf.geometry.x, sites_gdf.geometry.y, sites_gdf.name, sites_gdf.code, sites_gdf.distance_km):
-        ax.annotate(f'{label1} \n{label2} \n{label3:.2f} km', xy=(x, y), xytext=(15, -30), textcoords="offset points", fontsize=10,bbox=dict(facecolor='yellow', edgecolor='black', boxstyle='round,pad=0.5'))
+    for x, y, label1, label2, label3, label4 in zip(sites_gdf.geometry.x, sites_gdf.geometry.y, sites_gdf.name, sites_gdf.code, sites_gdf.distance_km, sites_gdf.elevation_m):
+        ax.annotate(f'{label1} \n{label2} \nElevation:{label4:.0f} m \nProximity:{label3:.2f} km', xy=(x, y), xytext=(15, -30), textcoords="offset points", fontsize=10,bbox=dict(facecolor='yellow', edgecolor='black', boxstyle='round,pad=0.5'))
+        
+        
+    #for x, y, label1, label2, label3 in zip(sites_gdf.geometry.x, sites_gdf.geometry.y, sites_gdf.name, sites_gdf.code, sites_gdf.distance_km):
+        #ax.annotate(f'{label1} \n{label2} \n{label3:.2f} km', xy=(x, y), xytext=(15, -30), textcoords="offset points", fontsize=10,bbox=dict(facecolor='yellow', edgecolor='black', boxstyle='round,pad=0.5'))
     
     return ax
 
@@ -490,8 +495,11 @@ def get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=
     values_dict = {}
     
     for site_code in sites_df['code']:
-        new_site = get_snotel(f'SNOTEL:{site_code}', variable_code,start_date=start_date, end_date=end_date)
-        values_dict[site_code] = new_site['value']
+        try:
+            new_site = get_snotel(f'SNOTEL:{site_code}', variable_code,start_date=start_date, end_date=end_date)
+            values_dict[site_code] = new_site['value']
+        except:
+            print(f'{site_code} data missing')
         if closest == True:
             break
         
@@ -499,7 +507,7 @@ def get_closest_snotel_data(ts_ds,variable_code='SNOTEL:SNWD_D',distance_cutoff=
     
     return site_data_df
 
-def get_s2_ndsi(ts_ds):
+def get_s2_ndsi(ts_ds,cloud_cover_threshold=20):
     '''
     Returns the ndsi time series of the area covered by a given xarray dataset using Sentinel 2 imagery
 
@@ -542,7 +550,6 @@ def get_s2_ndsi(ts_ds):
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
 
-    cloud_cover_threshold = 20
     lowcloud = stack[stack["eo:cloud_cover"] < cloud_cover_threshold]
     lowcloud = lowcloud
     #lowcloud = lowcloud.drop_duplicates("time","first")
@@ -560,7 +567,7 @@ def get_s2_ndsi(ts_ds):
     #scenes_ndsi_compute = scenes_ndsi_compute.where(ts_ds.isel(time=0)>0)
     return scenes_ndsi_compute
 
-def get_s2_ndwi(ts_ds):
+def get_s2_ndwi(ts_ds,cloud_cover_threshold=20):
     '''
     Returns the ndsi time series of the area covered by a given xarray dataset using Sentinel 2 imagery
 
@@ -603,7 +610,6 @@ def get_s2_ndwi(ts_ds):
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
 
-    cloud_cover_threshold = 20
     lowcloud = stack[stack["eo:cloud_cover"] < cloud_cover_threshold]
     lowcloud = lowcloud
     #lowcloud = lowcloud.drop_duplicates("time","first")
@@ -621,7 +627,7 @@ def get_s2_ndwi(ts_ds):
     #scenes_ndsi_compute = scenes_ndsi_compute.where(ts_ds.isel(time=0)>0)
     return scenes_ndwi_compute
 
-def get_s2_rgb(ts_ds):
+def get_s2_rgb(ts_ds,cloud_cover_threshold=20):
     '''
     Returns the rgb time series of the area covered by a given xarray dataset using Sentinel 2 imagery
 
@@ -665,7 +671,6 @@ def get_s2_rgb(ts_ds):
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
 
-    cloud_cover_threshold = 20
     lowcloud = stack[stack["eo:cloud_cover"] < cloud_cover_threshold]
     lowcloud = lowcloud
     #lowcloud = lowcloud.drop_duplicates("time","first")
@@ -770,7 +775,7 @@ def plot_bs_ndsi_swe_precip_with_context(ts_ds,start_date='1900-01-01', end_date
 
     
     ax[1].set_xlabel("Time")
-    ax[1].set_ylabel("Backscatter [Watts]")
+    ax[1].set_ylabel("Backscatter [dB]")
     snwd_ax.set_ylabel("Snow Depth / SWE [cm]")
     precip_ax.set_ylabel("Precipitation [cm]")
     ndsi_ax.set_ylabel("NDSI")
@@ -780,7 +785,7 @@ def plot_bs_ndsi_swe_precip_with_context(ts_ds,start_date='1900-01-01', end_date
 
     for orbit in np.unique(ts_ds.coords['sat:relative_orbit']):
         direction = ts_ds[ts_ds.coords['sat:relative_orbit']==orbit]['sat:orbit_state'].values[0].capitalize()
-        ax[1].plot(ts_ds[ts_ds.coords['sat:relative_orbit']==orbit].time,ts_ds[ts_ds.coords['sat:relative_orbit']==orbit].mean(dim=['x','y']),label=f'Orbit {orbit} ({direction})')
+        ax[1].plot(ts_ds[ts_ds.coords['sat:relative_orbit']==orbit].time,10.0*np.log10(ts_ds[ts_ds.coords['sat:relative_orbit']==orbit].mean(dim=['x','y'])),label=f'Orbit {orbit} ({direction})')
     #ax[1].legend()
     
     
@@ -838,7 +843,7 @@ def plot_bs_ndsi_swe_precip_with_context(ts_ds,start_date='1900-01-01', end_date
         break
     
     minx, miny, maxx, maxy = ts_ds.rio.bounds()
-    distance_cutoff=6
+    distance_cutoff=1
 
     
     #ts_ds.isel(time=0).plot(ax=ax[0],vmax=1.0,cmap='gray',add_colorbar=False)
