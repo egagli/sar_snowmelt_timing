@@ -206,11 +206,25 @@ def get_dah(ts_ds):
 #    runoff_dates = ts_ds[mins_info_runoff].time
 #    return runoff_dates
 
-def get_runoff_onset(ts_ds):
+def get_runoff_onset(ts_ds,return_seperate_orbits=False):
+    
     ts_ds = ts_ds.fillna(9999)
     mins_info_runoff = ts_ds.argmin(dim='time',skipna=True)
     runoff_dates = ts_ds[mins_info_runoff].time
+    runoff_dates = runoff_dates.expand_dims(dim={"orbit":np.unique(ts_ds['sat:relative_orbit'])},axis=2).copy()
+    
+    for orbit in np.unique(ts_ds['sat:relative_orbit']):
+        ts_ds_orbit = ts_ds[ts_ds['sat:relative_orbit']==orbit]
+        mins_info_runoff = ts_ds_orbit.argmin(dim='time',skipna=True)
+        runoff_dates.loc[:,:,orbit] = ts_ds_orbit[mins_info_runoff].time
+        
+    if return_seperate_orbits == False:
+        runoff_dates = runoff_dates.astype(np.int64).mean(axis=2).astype('datetime64[ns]')
+    else:
+        runoff_dates = runoff_dates
+        
     runoff_dates = runoff_dates.where(ts_ds.isel(time=0)!=9999)
+    
     return runoff_dates
 
 def get_ripening_onset(ts_ds,orbit='ascending'): # fix this
@@ -221,8 +235,21 @@ def get_ripening_onset(ts_ds,orbit='ascending'): # fix this
     ripening_dates = ripening_dates.where(ts_ds.isel(time=0)!=9999)
     return ripening_dates
 
-def get_stats(ts_ds,dem=None,aspect=None,slope=None,dah=None):
-    runoff_dates = get_runoff_onset(ts_ds)
+def get_stats(ts_ds,multiple_years=False,dem=None,aspect=None,slope=None,dah=None):
+    
+    if multiple_years == True:
+        year='2017'
+        time_slice = slice(f'{year}-01-01',f'{year}-12-31')
+        ts_ds_clipped = ts_ds.sel(time=time_slice)
+        runoff_dates_all = get_runoff_onset(ts_ds_clipped).dt.dayofyear
+        for year in ['2018','2019','2020']:
+            time_slice = slice(f'{year}-01-01',f'{year}-12-31')
+            ts_ds_clipped = ts_ds.sel(time=time_slice)
+            runoff_dates_all = runoff_dates_all + get_runoff_onset(ts_ds_clipped).dt.dayofyear
+        runoff_dates = runoff_dates_all/4
+    else:
+        runoff_dates = get_runoff_onset(ts_ds).dt.dayofyear
+        
     
     if all(np.array(ts_ds.coords['sat:orbit_state']=='descending')):
         ripening_dates = get_ripening_onset(ts_ds,orbit='descending')
@@ -254,7 +281,7 @@ def get_stats(ts_ds,dem=None,aspect=None,slope=None,dah=None):
     dates_df['aspect'] = aspect_projected.data.reshape(-1)
     dates_df['slope'] = slope_projected.data.reshape(-1)
     dates_df['dah'] = dah_projected.data.reshape(-1)
-    dates_df['runoff_dates'] = runoff_dates.dt.dayofyear.data.reshape(-1)
+    dates_df['runoff_dates'] = runoff_dates.data.reshape(-1)
     dates_df['ripening_dates'] = ripening_dates.dt.dayofyear.data.reshape(-1)
     dates_df = dates_df.dropna()
     
