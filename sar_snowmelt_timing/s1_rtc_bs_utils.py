@@ -66,6 +66,45 @@ def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().s
         scenes = scenes.where(scenes.coords['sat:orbit_state']==orbit_direction,drop=True)
     return scenes
 
+def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='vv'):
+    '''
+    Returns a Sentinel-1 SAR backscatter xarray dataset using STAC data from Planetary computer over the given time and bounding box.
+
+            Parameters:
+                    bbox_gdf (geopandas GeoDataframe): geodataframe bounding box
+                    start_time (str): start time of returned data 'YYYY-MM-DD'
+                    end_time (str): end time of returned data 'YYYY-MM-DD'
+                    orbit_direction (str): orbit direction of S1--can be all, ascending, or decending
+                    polarization (str): SAR polarization, use gamma0_vv
+                    collection (str): points to json collection, will be different for each MGRS square
+
+            Returns:
+                    scenes (xarray dataset): xarray stack of all scenes in the specified spatio-temporal window
+    '''
+    
+    
+    #bbox = [-80.11, 8.71, -79.24, 9.38]
+    #search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime="2022-05-02/2022-05-09")
+    #items = search.item_collection()
+    #ds = stackstac.stack(items, bounds_latlon=bbox, epsg=32610, resolution=10)
+    #ds
+    catalog = pystac_client.Client.open(
+    "https://planetarycomputer.microsoft.com/api/stac/v1",
+    modifier=planetary_computer.sign_inplace,)
+    #bbox = [-80.11, 8.71, -79.24, 9.38]
+    bbox = bbox_gdf.total_bounds
+    search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime=f"{start_time}/{end_time}")
+    items = search.item_collection()
+    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=32610, resolution=10)
+    bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
+    xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
+    scenes = stack.sel(band=polarization).sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
+        
+    #if orbit_direction == 'all':
+    #    scenes = scenes
+    #else:
+    #    scenes = scenes.where(scenes.coords['sat:orbit_state']==orbit_direction,drop=True)
+    return scenes
 
 def plot_sentinel1_acquisitons(ts_ds,ax=None,start_date='2015-01-01',end_date=datetime.today().strftime('%Y-%m-%d'),textsize=8):
     
