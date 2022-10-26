@@ -27,6 +27,8 @@ import rasterio as rio
 import shapely
 import scipy
 import contextily as ctx
+import planetary_computer
+
 
 def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='gamma0_vv',collection='mycollection.json'):
     '''
@@ -82,6 +84,8 @@ def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today(
                     scenes (xarray dataset): xarray stack of all scenes in the specified spatio-temporal window
     '''
     
+    # https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc
+    
     
     #bbox = [-80.11, 8.71, -79.24, 9.38]
     #search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime="2022-05-02/2022-05-09")
@@ -95,7 +99,7 @@ def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today(
     bbox = bbox_gdf.total_bounds
     search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime=f"{start_time}/{end_time}")
     items = search.item_collection()
-    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=32610, resolution=10)
+    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=32610, resolution=20)
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
     scenes = stack.sel(band=polarization).sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
@@ -250,19 +254,32 @@ def get_runoff_onset(ts_ds,return_seperate_orbits=False):
     ts_ds = ts_ds.fillna(9999)
     mins_info_runoff = ts_ds.argmin(dim='time',skipna=True)
     runoff_dates = ts_ds[mins_info_runoff].time
-    runoff_dates = runoff_dates.expand_dims(dim={"orbit":np.unique(ts_ds['sat:relative_orbit'])},axis=2).copy()
+    
+    year = ts_ds.time[0].dt.year.values
+    unique_full_coverage = []
+    melt_season = slice(f'{year}-03-01',f'{year}-08-01')
     
     for orbit in np.unique(ts_ds['sat:relative_orbit']):
+        if len(ts_ds[ts_ds['sat:relative_orbit']==orbit].sel(time=melt_season).time.values) > 4:
+            unique_full_coverage.append(orbit)
+    unique_full_coverage = np.array(unique_full_coverage)
+    
+    runoff_dates = runoff_dates.expand_dims(dim={"orbit":unique_full_coverage},axis=2).copy()
+    
+    print(unique_full_coverage)
+    for orbit in unique_full_coverage:
         ts_ds_orbit = ts_ds[ts_ds['sat:relative_orbit']==orbit]
         mins_info_runoff = ts_ds_orbit.argmin(dim='time',skipna=True)
         runoff_dates.loc[:,:,orbit] = ts_ds_orbit[mins_info_runoff].time
         
     if return_seperate_orbits == False:
-        runoff_dates = runoff_dates.astype(np.int64).mean(axis=2).astype('datetime64[ns]')
+        runoff_dates = runoff_dates.astype(np.int64).mean(axis=2,skipna=True).astype('datetime64[ns]') # changed to nanmean
     else:
         runoff_dates = runoff_dates
         
-    runoff_dates = runoff_dates.where(ts_ds.isel(time=0)!=9999)
+    runoff_dates = runoff_dates.where(ts_ds.min(dim='time')!=9999)
+    #runoff_dates = runoff_dates.dropna(dim='orbit',how='all')
+    #runoff_dates = runoff_dates.where(ts_ds.dropna(dim='time',how='all'))
     
     return runoff_dates
 
@@ -277,15 +294,17 @@ def get_ripening_onset(ts_ds,orbit='ascending'): # fix this
 def get_stats(ts_ds,multiple_years=False,dem=None,aspect=None,slope=None,dah=None):
     
     if multiple_years == True:
-        year='2017'
-        time_slice = slice(f'{year}-01-01',f'{year}-12-31')
+        start_year = ts_ds.time[0].dt.year.values
+        end_year = ts_ds.time[-1].dt.year.values
+        years = np.arange(start_year,end_year+1,1)
+        time_slice = slice(f'{start_year}-01-01',f'{end_year}-12-31')
         ts_ds_clipped = ts_ds.sel(time=time_slice)
         runoff_dates_all = get_runoff_onset(ts_ds_clipped).dt.dayofyear
-        for year in ['2018','2019','2020']:
+        for year in years:
             time_slice = slice(f'{year}-01-01',f'{year}-12-31')
             ts_ds_clipped = ts_ds.sel(time=time_slice)
             runoff_dates_all = runoff_dates_all + get_runoff_onset(ts_ds_clipped).dt.dayofyear
-        runoff_dates = runoff_dates_all/4
+        runoff_dates = runoff_dates_all/len(years)
     else:
         runoff_dates = get_runoff_onset(ts_ds).dt.dayofyear
         
