@@ -68,7 +68,7 @@ def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().s
         scenes = scenes.where(scenes.coords['sat:orbit_state']==orbit_direction,drop=True)
     return scenes
 
-def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='vv'):
+def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='vv',epsg=32610,resolution=20):
     '''
     Returns a Sentinel-1 SAR backscatter xarray dataset using STAC data from Planetary computer over the given time and bounding box.
 
@@ -99,7 +99,7 @@ def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today(
     bbox = bbox_gdf.total_bounds
     search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime=f"{start_time}/{end_time}")
     items = search.item_collection()
-    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=32610, resolution=20)
+    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=epsg, resolution=resolution)
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
     scenes = stack.sel(band=polarization).sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
@@ -251,6 +251,7 @@ def get_dah(ts_ds):
 
 def get_runoff_onset(ts_ds,return_seperate_orbits=False):
     
+    #ts_ds = ts_ds.where(ts_ds>0.005) # remove this if we fix edge of scene error
     ts_ds = ts_ds.fillna(9999)
     mins_info_runoff = ts_ds.argmin(dim='time',skipna=True)
     runoff_dates = ts_ds[mins_info_runoff].time
@@ -260,7 +261,8 @@ def get_runoff_onset(ts_ds,return_seperate_orbits=False):
     melt_season = slice(f'{year}-03-01',f'{year}-08-01')
     
     for orbit in np.unique(ts_ds['sat:relative_orbit']):
-        if len(ts_ds[ts_ds['sat:relative_orbit']==orbit].sel(time=melt_season).time.values) > 4:
+        if len(ts_ds[ts_ds['sat:relative_orbit']==orbit].sel(time=melt_season).time.values) >= 4:
+            # and now check to see if scene is mostly?? full
             unique_full_coverage.append(orbit)
     unique_full_coverage = np.array(unique_full_coverage)
     
@@ -269,11 +271,17 @@ def get_runoff_onset(ts_ds,return_seperate_orbits=False):
     print(unique_full_coverage)
     for orbit in unique_full_coverage:
         ts_ds_orbit = ts_ds[ts_ds['sat:relative_orbit']==orbit]
+        #ts_ds_orbit = ts_ds_orbit.where(ts_ds_orbit.max(dim='time')>0.001)
         mins_info_runoff = ts_ds_orbit.argmin(dim='time',skipna=True)
-        runoff_dates.loc[:,:,orbit] = ts_ds_orbit[mins_info_runoff].time
+        #mins_info_runoff = mins_info_runoff.where(ts_ds_orbit.all(dim='time'))
+        runoff_ds = ts_ds_orbit[mins_info_runoff].time
+        #runoff_dates.loc[:,:,orbit]= runoff_dates.loc[:,:,orbit]
+        runoff_dates.loc[:,:,orbit] = runoff_ds.where((ts_ds_orbit.sum(dim='time')>0) & (ts_ds_orbit.sum(dim='time')<9998))
+        
         
     if return_seperate_orbits == False:
-        runoff_dates = runoff_dates.astype(np.int64).mean(axis=2,skipna=True).astype('datetime64[ns]') # changed to nanmean
+        #runoff_dates = runoff_dates.astype(np.int64).mean(axis=2,skipna=False).astype('datetime64[ns]') # changed to nanmean
+        runoff_dates = runoff_dates.astype(np.int64).where(runoff_dates.notnull()).mean(axis=2,skipna=True).astype('datetime64[ns]')
     else:
         runoff_dates = runoff_dates
         
