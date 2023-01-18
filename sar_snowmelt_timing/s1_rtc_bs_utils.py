@@ -102,6 +102,39 @@ def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today(
 
     return scenes
 
+def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31',resolution=10):
+    import odc.stac,odc
+
+    catalog = pystac_client.Client.open(
+    "https://planetarycomputer.microsoft.com/api/stac/v1",
+    modifier=planetary_computer.sign_inplace,)
+    bbox = bbox_gdf.total_bounds
+    search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime=f"{start_time}/{end_time}",limit=1000)
+    items = search.item_collection()
+
+    ds = odc.stac.load(
+    search.get_items(), 
+    chunks={'x':512,'y':512}, 
+    bands={"vv",'vh'},
+    crs="EPSG:32610",
+    resolution=odc.geo.Resolution(resolution, -resolution)).where(lambda x: x > 0, other=np.nan)
+    
+    bounding_box_utm_gf = bbox_gdf.to_crs(ds.rio.crs)
+    xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
+    
+    scenes = ds.sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
+    
+    orbits = [scene.properties['sat:relative_orbit'] for scene in items.items]
+    scenes = scenes.assign_coords({'sat:relative_orbit':('time',orbits)}).to_array(dim='band').transpose('time','band','y','x')
+    
+    scenes = scenes.assign_attrs({'resolution':resolution})
+    
+    return scenes.chunk((100,1,512,512))
+
+
+
+
+
 def plot_sentinel1_acquisitons(ts_ds,ax=None,start_date='2015-01-01',end_date=datetime.today().strftime('%Y-%m-%d'),textsize=8):
     
     if ax is None:
