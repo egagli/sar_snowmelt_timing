@@ -67,7 +67,7 @@ def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().s
         scenes = scenes.where(scenes.coords['sat:orbit_state']==orbit_direction,drop=True)
     return scenes
 
-def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='vv',resolution=20):
+def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),polarization='vv',resolution=20):
     '''
     Returns a Sentinel-1 SAR backscatter xarray dataset using STAC data from Planetary computer over the given time and bounding box.
 
@@ -89,7 +89,7 @@ def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today(
     bbox = bbox_gdf.total_bounds
     search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime=f"{start_time}/{end_time}", limit=1000) #remove limit if needed
     items = search.item_collection()
-    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=32610, dtype='float32',chunksize=512) #put resolution back in when fixed
+    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=32610, dtype='float32',chunksize=512, resolution=resolution) #put resolution back in when fixed
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
     
@@ -115,7 +115,7 @@ def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31
     ds = odc.stac.load(
     search.get_items(), 
     chunks={'x':512,'y':512}, 
-    bands={"vv",'vh'},
+    bands={"vv","vh"},
     crs="EPSG:32610",
     resolution=odc.geo.Resolution(resolution, -resolution)).where(lambda x: x > 0, other=np.nan)
     
@@ -387,6 +387,12 @@ def get_runoff_onset(ts_ds,return_seperate_orbits_and_polarizations=False):
         
     return runoffs_int64.astype('datetime64[ns]')
 
+def get_runoffs_onset(ts_ds):
+    orbits = get_orbits_with_melt_season_coverage(ts_ds)
+    ts_ds = ts_ds[ts_ds['sat:relative_orbit'].isin(orbits)]
+    runoffs = ts_ds.groupby('sat:relative_orbit').map(lambda c: c.idxmin(dim='time'))
+    return runoffs
+
 # def get_runoff_onset(ts_ds,return_seperate_orbits=False,return_seperate_polarizations=False,combine_orbits='median'):
 #     ts_ds = ts_ds.fillna(9999)
 #     mins_index_runoff = ts_ds.argmin(dim='time',skipna=False)
@@ -526,15 +532,15 @@ def plot_timeseries_by_elevation_bin(ts_ds,dem_ds,bin_size=100,ax=None,normalize
             backscatter_ts_for_bin = np.nanmean(ts_bin_ds.data.reshape(ts_bin_ds.shape[0],-1), axis=1) 
         backscatter_full.append(list(backscatter_ts_for_bin))
         
-    backscatter_df = pd.DataFrame(backscatter_full,index=bin_centers,columns=ts_ds.time)
+    backscatter_df = 10*np.log10(pd.DataFrame(backscatter_full,index=bin_centers,columns=ts_ds.time))
     
     if normalize_bins == True:
           backscatter_df = ((backscatter_df.T-backscatter_df.T.min())/(backscatter_df.T.max()-backscatter_df.T.min())).T
-    colors = ax.pcolormesh(pd.to_datetime(ts_ds.time), bin_centers, backscatter_df,cmap='inferno',edgecolors=(1.0, 1.0, 1.0, 0.3)) #,vmin=0,vmax=0.5
+    colors = ax.pcolormesh(pd.to_datetime(ts_ds.time), bin_centers, backscatter_df,cmap='inferno') #,vmin=0,vmax=0.5 # ,edgecolors=(1.0, 1.0, 1.0, 0.1)
     cbar = f.colorbar(colors,ax=ax)
     
     if normalize_bins == False:
-        lab = 'Mean Backscatter [Watts]'
+        lab = 'Mean Backscatter [dB]'
     else:
         lab = 'Normalized (Elevation-wise) Backscatter'
     
