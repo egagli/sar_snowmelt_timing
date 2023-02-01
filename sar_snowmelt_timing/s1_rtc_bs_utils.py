@@ -16,12 +16,11 @@ from dask.distributed import Client
 import rioxarray
 import os
 import matplotlib.pyplot as plt
-import ulmo
+#import ulmo
 from datetime import datetime
 import xarray as xr
 import rioxarray as rxr
 import warnings
-import py3dep
 import geopandas as gpd
 import rasterio as rio
 import shapely
@@ -68,7 +67,7 @@ def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().s
         scenes = scenes.where(scenes.coords['sat:orbit_state']==orbit_direction,drop=True)
     return scenes
 
-def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='vv',epsg=32610,resolution=20):
+def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),polarization='vv',resolution=20):
     '''
     Returns a Sentinel-1 SAR backscatter xarray dataset using STAC data from Planetary computer over the given time and bounding box.
 
@@ -84,31 +83,57 @@ def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today(
                     scenes (xarray dataset): xarray stack of all scenes in the specified spatio-temporal window
     '''
     
-    # https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc
-    
-    
-    #bbox = [-80.11, 8.71, -79.24, 9.38]
-    #search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime="2022-05-02/2022-05-09")
-    #items = search.item_collection()
-    #ds = stackstac.stack(items, bounds_latlon=bbox, epsg=32610, resolution=10)
-    #ds
     catalog = pystac_client.Client.open(
     "https://planetarycomputer.microsoft.com/api/stac/v1",
     modifier=planetary_computer.sign_inplace,)
-    #bbox = [-80.11, 8.71, -79.24, 9.38]
     bbox = bbox_gdf.total_bounds
-    search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime=f"{start_time}/{end_time}")
+    search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime=f"{start_time}/{end_time}", limit=1000) #remove limit if needed
     items = search.item_collection()
-    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=epsg, resolution=resolution)
+    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=32610, dtype='float32',chunksize=512, resolution=resolution) #put resolution back in when fixed
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
-    scenes = stack.sel(band=polarization).sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
+    
+    if polarization == 'all':
+        scenes = stack.sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
+    else:
+        scenes = stack.sel(band=polarization).sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
         
-    #if orbit_direction == 'all':
-    #    scenes = scenes
-    #else:
-    #    scenes = scenes.where(scenes.coords['sat:orbit_state']==orbit_direction,drop=True)
+    scenes = scenes.drop_duplicates(dim='time',keep='first')
+
     return scenes
+
+def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31',resolution=10):
+    import odc.stac,odc
+
+    catalog = pystac_client.Client.open(
+    "https://planetarycomputer.microsoft.com/api/stac/v1",
+    modifier=planetary_computer.sign_inplace,)
+    bbox = bbox_gdf.total_bounds
+    search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime=f"{start_time}/{end_time}",limit=1000)
+    items = search.item_collection()
+
+    ds = odc.stac.load(
+    search.get_items(), 
+    chunks={'x':512,'y':512}, 
+    bands={"vv","vh"},
+    crs="EPSG:32610",
+    resolution=odc.geo.Resolution(resolution, -resolution)).where(lambda x: x > 0, other=np.nan)
+    
+    bounding_box_utm_gf = bbox_gdf.to_crs(ds.rio.crs)
+    xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
+    
+    scenes = ds.sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
+    
+    orbits = [scene.properties['sat:relative_orbit'] for scene in items.items]
+    scenes = scenes.assign_coords({'sat:relative_orbit':('time',orbits)}).to_array(dim='band').transpose('time','band','y','x')
+    
+    scenes = scenes.assign_attrs({'resolution':resolution})
+    
+    return scenes.chunk((100,1,512,512))
+
+
+
+
 
 def plot_sentinel1_acquisitons(ts_ds,ax=None,start_date='2015-01-01',end_date=datetime.today().strftime('%Y-%m-%d'),textsize=8):
     
@@ -203,7 +228,71 @@ def get_median_ndvi(ts_ds,start_time='2020-07-30',end_time='2020-09-09'):
     frames_ndvi_compute = scenes_ndvi.rio.reproject_match(ts_ds).compute()
     return frames_ndvi_compute
 
+def get_median_ndwi(ts_ds,start_time='2020-01-01',end_time='2020-02-15'):
+    '''
+    Returns the median ndvi of the area covered by a given xarray dataset using Sentinel 2 imagery given a specific temporal window. Good for building an ndvi mask.
+
+            Parameters:
+                    ts_ds (xarray dataset): the area we will return the median ndvi over
+                    start_time (str): start time of returned data 'YYYY-MM-DD'
+                    end_time (str): end time of returned data 'YYYY-MM-DD'
+
+            Returns:
+                    frames_ndvi_compute (xarray dataset): computed ndvi median of the Sentinel 2 stack, reprojected to the same grid as the input dataset
+    '''
+    # go from ds to lat lon here
+    ds_4326 = ts_ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
+    box = shapely.geometry.box(*ds_4326.rio.bounds())
+    bbox_gdf = gpd.GeoDataFrame(index=[0], crs='epsg:4326', geometry=[box])
+    # must be lat lot bounding box
+    lower_lon, upper_lat, upper_lon, lower_lat = bbox_gdf.bounds.values[0]
+    #lower_lon, upper_lat, upper_lon, lower_lat = gdf.geometry.total_bounds
+
+    lon = (lower_lon + upper_lon)/2
+    lat = (lower_lat + upper_lat)/2
+    
+    URL = "https://earth-search.aws.element84.com/v0"
+    catalog = pystac_client.Client.open(URL)
+    
+    items = catalog.search(
+    intersects=dict(type="Point", coordinates=[lon, lat]),
+    collections=["sentinel-s2-l2a-cogs"],
+    datetime=f"{start_time}/{end_time}").get_all_items()
+    
+    string = f'{ts_ds.rio.crs}'
+    epsg_code = int(string[5:])
+    
+    stack = stackstac.stack(items,epsg=epsg_code)
+    
+    if np.unique(stack['proj:epsg']).size>1:
+        stack = stack[stack['proj:epsg']!=stack['epsg']]
+    
+    bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
+    xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
+
+    cloud_cover_threshold = 20
+    lowcloud = stack[stack["eo:cloud_cover"] < cloud_cover_threshold]
+
+    nir, red, = lowcloud.sel(band="B03"), lowcloud.sel(band="B08")
+    ndvi = (nir-red)/(nir+red)
+    
+    #if np.unique(ndvi['proj:epsg']).size>1:
+    #    try:
+    #        ndvi = ndvi[ndvi['proj:epsg']==ndvi['proj:epsg'][1]].compute()
+    #    except: 
+    #        ndvi = ndvi[ndvi['proj:epsg']==ndvi['proj:epsg'][0]].compute()
+    #else:
+    #    ndvi = ndvi.compute()
+    
+    time_slice_ndvi = slice(start_time,end_time)
+    scenes_ndvi = ndvi.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sel(time=time_slice_ndvi).median("time", keep_attrs=True)
+    scenes_ndvi = scenes_ndvi.rio.write_crs(stack.rio.crs)
+    frames_ndvi_compute = scenes_ndvi.rio.reproject_match(ts_ds).compute()
+    return frames_ndvi_compute
+
+
 def get_py3dep_dem(ts_ds):
+    import py3dep
     ds_4326 = ts_ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
     bbox = ds_4326.rio.bounds()
     dem = py3dep.get_map("DEM", bbox, resolution=10, geo_crs="epsg:4326", crs="epsg:3857")
@@ -213,6 +302,7 @@ def get_py3dep_dem(ts_ds):
     return dem_reproject
 
 def get_py3dep_aspect(ts_ds):
+    import py3dep
     ds_4326 = ts_ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
     bbox = ds_4326.rio.bounds()
     dem = py3dep.get_map("Aspect Degrees", bbox, resolution=10, geo_crs="epsg:4326", crs="epsg:3857")
@@ -222,6 +312,7 @@ def get_py3dep_aspect(ts_ds):
     return dem_reproject
 
 def get_py3dep_slope(ts_ds):
+    import py3dep
     ds_4326 = ts_ds.rio.reproject('EPSG:4326', resampling=rio.enums.Resampling.cubic)
     bbox = ds_4326.rio.bounds()
     dem = py3dep.get_map("Slope Degrees", bbox, resolution=10, geo_crs="epsg:4326", crs="epsg:3857")
@@ -231,6 +322,7 @@ def get_py3dep_slope(ts_ds):
     return dem_reproject
 
 def get_dah(ts_ds):
+    import py3dep
     # Diurnal Anisotropic Heating Index [Böhner and Antonić, 2009]
     # https://www.sciencedirect.com/science/article/abs/pii/S0166248108000081
     # DAH = cos(alpha_max-alpha)*arctan(beta) where alpha_max is slope aspect 
@@ -244,52 +336,106 @@ def get_dah(ts_ds):
     DAH_reproject = DAH.rio.reproject_match(ts_ds)
     return DAH_reproject
 
-#def get_runoff_onset(ts_ds):
-#    mins_info_runoff = ts_ds.argmin(dim='time',skipna=False)
-#    runoff_dates = ts_ds[mins_info_runoff].time
-#    return runoff_dates
+def get_worldcover(ts_ds):
+    
+    bbox = ts_ds.rio.transform_bounds(rio.crs.CRS.from_epsg(4326))
+    
+    catalog = pystac_client.Client.open(
+    "https://planetarycomputer.microsoft.com/api/stac/v1",
+    modifier=planetary_computer.sign_inplace,
+    )
 
-def get_runoff_onset(ts_ds,return_seperate_orbits=False):
+    search = catalog.search(
+    collections=["esa-worldcover"],
+    bbox=bbox,
+    )
+
+    items = list(search.get_items())
+    #print(f"Returned {len(items)} Items")
+
+    string = f'{ts_ds.rio.crs}'
+    epsg_code = int(string[5:])
     
-    #ts_ds = ts_ds.where(ts_ds>0.005) # remove this if we fix edge of scene error
-    ts_ds = ts_ds.fillna(9999)
-    mins_info_runoff = ts_ds.argmin(dim='time',skipna=True)
-    runoff_dates = ts_ds[mins_info_runoff].time
+    stack_lc = stackstac.stack(items, bounds_latlon=bbox, epsg=epsg_code, resolution=ts_ds.resolution)#ts_ds.resolution or ts_ds.rio.resolution()[0]
     
+    stack_lc = stack_lc.min(dim='time').squeeze()
+    
+    stack_lc = stack_lc.rio.write_crs(ts_ds.rio.crs)
+    stack_lc = stack_lc.rio.reproject_match(ts_ds)
+    
+    return stack_lc
+
+def get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=4):
     year = ts_ds.time[0].dt.year.values
     unique_full_coverage = []
     melt_season = slice(f'{year}-03-01',f'{year}-08-01')
     
     for orbit in np.unique(ts_ds['sat:relative_orbit']):
-        if len(ts_ds[ts_ds['sat:relative_orbit']==orbit].sel(time=melt_season).time.values) >= 4:
-            # and now check to see if scene is mostly?? full
+        if len(ts_ds[ts_ds['sat:relative_orbit']==orbit].sel(time=melt_season).time.values) > num_acquisitions_during_melt_season:
             unique_full_coverage.append(orbit)
     unique_full_coverage = np.array(unique_full_coverage)
     
-    runoff_dates = runoff_dates.expand_dims(dim={"orbit":unique_full_coverage},axis=2).copy()
+    return unique_full_coverage
+
+def get_runoff_onset(ts_ds,return_seperate_orbits_and_polarizations=False):
+    orbits = get_orbits_with_melt_season_coverage(ts_ds)
+    ts_ds = ts_ds[ts_ds['sat:relative_orbit'].isin(orbits)]
+    runoffs_int64 = ts_ds.groupby('sat:relative_orbit').map(lambda c: c.idxmin(dim='time')).astype(np.int64)
     
-    print(unique_full_coverage)
-    for orbit in unique_full_coverage:
-        ts_ds_orbit = ts_ds[ts_ds['sat:relative_orbit']==orbit]
-        #ts_ds_orbit = ts_ds_orbit.where(ts_ds_orbit.max(dim='time')>0.001)
-        mins_info_runoff = ts_ds_orbit.argmin(dim='time',skipna=True)
-        #mins_info_runoff = mins_info_runoff.where(ts_ds_orbit.all(dim='time'))
-        runoff_ds = ts_ds_orbit[mins_info_runoff].time
-        #runoff_dates.loc[:,:,orbit]= runoff_dates.loc[:,:,orbit]
-        runoff_dates.loc[:,:,orbit] = runoff_ds.where((ts_ds_orbit.sum(dim='time')>0) & (ts_ds_orbit.sum(dim='time')<9998))
+    if return_seperate_orbits_and_polarizations==False: # if false (default), return median
+        runoffs_int64 = runoffs_int64.where(runoffs_int64>0).median(dim=['sat:relative_orbit','band'],skipna=True)
         
-        
-    if return_seperate_orbits == False:
-        #runoff_dates = runoff_dates.astype(np.int64).mean(axis=2,skipna=False).astype('datetime64[ns]') # changed to nanmean
-        runoff_dates = runoff_dates.astype(np.int64).where(runoff_dates.notnull()).mean(axis=2,skipna=True).astype('datetime64[ns]')
-    else:
-        runoff_dates = runoff_dates
-        
-    runoff_dates = runoff_dates.where(ts_ds.min(dim='time')!=9999)
-    #runoff_dates = runoff_dates.dropna(dim='orbit',how='all')
-    #runoff_dates = runoff_dates.where(ts_ds.dropna(dim='time',how='all'))
+    return runoffs_int64.astype('datetime64[ns]')
+
+def get_runoffs_onset(ts_ds):
+    orbits = get_orbits_with_melt_season_coverage(ts_ds)
+    ts_ds = ts_ds[ts_ds['sat:relative_orbit'].isin(orbits)]
+    runoffs = ts_ds.groupby('sat:relative_orbit').map(lambda c: c.idxmin(dim='time'))
+    return runoffs
+
+# def get_runoff_onset(ts_ds,return_seperate_orbits=False,return_seperate_polarizations=False,combine_orbits='median'):
+#     ts_ds = ts_ds.fillna(9999)
+#     mins_index_runoff = ts_ds.argmin(dim='time',skipna=False)
+#     runoff_dates = ts_ds[mins_index_runoff.compute()].time #this is just to establish the shape of runoff_dates #add.compute()
     
-    return runoff_dates
+
+#     unique_full_coverage = get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=4)
+    
+#     runoff_dates = runoff_dates.expand_dims(dim={"orbit":unique_full_coverage},axis=2).copy()
+    
+#     print(f'Using relative orbits: {unique_full_coverage}')
+#     for orbit in unique_full_coverage:
+#         print(f'Calculating runoff onset map from relative orbit {orbit}...')
+#         ts_ds_orbit = ts_ds[ts_ds['sat:relative_orbit']==orbit]
+#         mins_info_runoff = ts_ds_orbit.argmin(dim='time',skipna=True)
+#         runoff_ds = ts_ds_orbit[mins_info_runoff.compute()].time #.compute()
+#         runoff_ds = runoff_ds.where(ts_ds_orbit.min(dim='time')!=9999)#commment this line out, testing
+#         runoff_dates.loc[:,:,orbit] = runoff_ds#.where((ts_ds_orbit.sum(dim='time')>0) & (ts_ds_orbit.sum(dim='time')<9998))# commenting this out
+
+        
+#     if (return_seperate_orbits == False) & (return_seperate_polarizations == False):
+#         reduced_dims = ['orbit','band']
+#     elif (return_seperate_orbits == False) & (return_seperate_polarizations == True):
+#         reduced_dims = 'orbit'
+#     elif (return_seperate_orbits == True) & (return_seperate_polarizations == False):
+#         reduced_dims = 'band'
+        
+    
+#     if (return_seperate_orbits == False) | (return_seperate_polarizations == False):
+#         if combine_orbits=='median':
+#             runoff_dates = runoff_dates.astype(np.int64)
+#             runoff_dates = runoff_dates.where(runoff_dates>0).median(dim=reduced_dims,skipna=True).astype('datetime64[ns]') # changed to nanmean
+#         elif combine_orbits=='mean':
+#             runoff_dates = runoff_dates.astype(np.int64)
+#             runoff_dates = runoff_dates.where(runoff_dates>0).mean(dim=reduced_dims,skipna=True).astype('datetime64[ns]') # changed to nanmean
+#     else:
+#         runoff_dates = runoff_dates
+        
+#     #runoff_dates = runoff_dates.where(ts_ds.min(dim='time')!=9999)
+#     #runoff_dates = runoff_dates.dropna(dim='orbit',how='all')
+#     #runoff_dates = runoff_dates.where(ts_ds.dropna(dim='time',how='all'))
+    
+#     return runoff_dates
 
 def get_ripening_onset(ts_ds,orbit='ascending'): # fix this
     ts_ds = ts_ds.fillna(9999)
@@ -386,15 +532,15 @@ def plot_timeseries_by_elevation_bin(ts_ds,dem_ds,bin_size=100,ax=None,normalize
             backscatter_ts_for_bin = np.nanmean(ts_bin_ds.data.reshape(ts_bin_ds.shape[0],-1), axis=1) 
         backscatter_full.append(list(backscatter_ts_for_bin))
         
-    backscatter_df = pd.DataFrame(backscatter_full,index=bin_centers,columns=ts_ds.time)
+    backscatter_df = 10*np.log10(pd.DataFrame(backscatter_full,index=bin_centers,columns=ts_ds.time))
     
     if normalize_bins == True:
           backscatter_df = ((backscatter_df.T-backscatter_df.T.min())/(backscatter_df.T.max()-backscatter_df.T.min())).T
-    colors = ax.pcolormesh(pd.to_datetime(ts_ds.time), bin_centers, backscatter_df,cmap='inferno',edgecolors=(1.0, 1.0, 1.0, 0.3)) #,vmin=0,vmax=0.5
+    colors = ax.pcolormesh(pd.to_datetime(ts_ds.time), bin_centers, backscatter_df,cmap='inferno') #,vmin=0,vmax=0.5 # ,edgecolors=(1.0, 1.0, 1.0, 0.1)
     cbar = f.colorbar(colors,ax=ax)
     
     if normalize_bins == False:
-        lab = 'Mean Backscatter [Watts]'
+        lab = 'Mean Backscatter [dB]'
     else:
         lab = 'Normalized (Elevation-wise) Backscatter'
     
@@ -660,7 +806,7 @@ def get_s2_ndsi(ts_ds,cloud_cover_threshold=20):
     #scenes_ndsi_compute = scenes_ndsi_compute.where(ts_ds.isel(time=0)>0)
     return scenes_ndsi_compute
 
-def get_s2_ndwi(ts_ds,cloud_cover_threshold=20):
+def get_s2_ndwi(ts_ds,cloud_cover_threshold=20,start_time=None,end_time=None):
     '''
     Returns the ndsi time series of the area covered by a given xarray dataset using Sentinel 2 imagery
 
@@ -681,8 +827,10 @@ def get_s2_ndwi(ts_ds,cloud_cover_threshold=20):
     lon = (lower_lon + upper_lon)/2
     lat = (lower_lat + upper_lat)/2
     
-    start_time = pd.to_datetime(ts_ds.time[0].values).strftime('%Y-%m-%d')
-    end_time = pd.to_datetime(ts_ds.time[-1].values).strftime('%Y-%m-%d')
+    if start_time == None:
+        start_time = pd.to_datetime(ts_ds.time[0].values).strftime('%Y-%m-%d')
+    if end_time == None:
+        end_time = pd.to_datetime(ts_ds.time[-1].values).strftime('%Y-%m-%d')
     
     URL = "https://earth-search.aws.element84.com/v0"
     catalog = pystac_client.Client.open(URL)
