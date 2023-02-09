@@ -98,11 +98,11 @@ def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today(
     else:
         scenes = stack.sel(band=polarization).sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
         
-    scenes = scenes.drop_duplicates(dim='time',keep='first')
+    scenes = scenes#.drop_duplicates(dim='time',keep='first')
 
     return scenes
 
-def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31',resolution=10):
+def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31',resolution=10,epsg="EPSG:32610"):
     import odc.stac,odc
 
     catalog = pystac_client.Client.open(
@@ -115,8 +115,8 @@ def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31
     ds = odc.stac.load(
     search.get_items(), 
     chunks={'x':512,'y':512}, 
-    bands={"vv","vh"},
-    crs="EPSG:32610",
+    #bands={"vv","vh"},
+    crs=epsg, # do we need this?
     resolution=odc.geo.Resolution(resolution, -resolution)).where(lambda x: x > 0, other=np.nan)
     
     bounding_box_utm_gf = bbox_gdf.to_crs(ds.rio.crs)
@@ -125,13 +125,80 @@ def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31
     scenes = ds.sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
     
     orbits = [scene.properties['sat:relative_orbit'] for scene in items.items]
+    direction = [scene.properties['sat:orbit_state'] for scene in items.items]
+    scenes = scenes.assign_coords({'sat:orbit_state':('time',direction)})
     scenes = scenes.assign_coords({'sat:relative_orbit':('time',orbits)}).to_array(dim='band').transpose('time','band','y','x')
     
     scenes = scenes.assign_attrs({'resolution':resolution})
     
-    return scenes.chunk((100,1,512,512))
+    return scenes.chunk((100,1,512,512)) # does this make things faster?
+
+def get_s1_rtc_stac_odc_mgrs_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31',resolution=10):
+    import odc.stac,odc
+    import ast
+    from odc.geo.geobox import GeoBox
 
 
+    
+    s = bbox_gdf.iloc[0] #geoseries
+
+    GEOMETRY = s.geometry.__geo_interface__
+    BOUNDS = ast.literal_eval(s.utm_bounds)
+    EPSG = str(s.epsg)
+
+    catalog = pystac_client.Client.open(
+    "https://planetarycomputer.microsoft.com/api/stac/v1",
+    modifier=planetary_computer.sign_inplace,)
+    
+    bbox = bbox_gdf.total_bounds
+    search = catalog.search(
+    collections = ['sentinel-1-rtc'],
+    intersects = GEOMETRY,
+    query={"proj:epsg": {"eq": EPSG}}, # Prevent adjacent MGRS Squares
+    sortby='+datetime', #ascending order +, descending order -
+)
+    
+    items = search.get_all_items()
+
+    gf = gpd.GeoDataFrame.from_features( items.to_dict(), crs='EPSG:4326')
+    gf['stac_id'] = [item.id for item in items]
+    gf['time'] = pd.to_datetime(gf.datetime) # Use standard xarray dimension name 'time' for index
+    gf = gf.set_index('time').tz_localize(None).sort_index()
+
+    GRID = GeoBox.from_bbox(BOUNDS, 
+                 crs=EPSG,
+                 resolution=resolution,       
+                )    
+    
+    ds = odc.stac.load(
+    items, 
+    #groupby='sat:absolute_orbit',
+    chunks={'x':512,'y':512},
+    geobox=GRID)
+    
+    ds = ds.sortby('time')
+    ds = ds.where(lambda x: x > 0, other=np.nan)
+    
+    #bounding_box_utm_gf = bbox_gdf.to_crs(ds.rio.crs)
+    #xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
+    
+    #scenes = ds.sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
+    
+    #orbits = [scene.properties['sat:relative_orbit'] for scene in items.items]
+    #direction = [scene.properties['sat:orbit_state'] for scene in items.items]
+    
+    ds = ds.assign_coords(relative_orbit=gf['sat:relative_orbit'],
+                      orbit_state=gf['sat:orbit_state'],
+                      stac_id=gf['stac_id'],
+                     )
+    
+    ds = ds.rename({'relative_orbit': 'sat:relative_orbit','orbit_state': 'sat:orbit_state'})
+    
+    da = ds.to_array(dim='band').transpose('time','band','y','x')
+    
+    da = da.assign_attrs({'resolution':resolution})
+    
+    return da 
 
 
 
