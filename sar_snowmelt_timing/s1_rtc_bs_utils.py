@@ -724,7 +724,7 @@ def plot_backscatter_ts_and_ndvi(ts_ds,ndvi_ds):
     plt.tight_layout()
     
 def find_closest_snotel(ts_ds):
-    
+    import ulmo
     sites_df=pd.DataFrame.from_dict(ulmo.cuahsi.wof.get_sites('https://hydroportal.cuahsi.org/Snotel/cuahsi_1_1.asmx?WSDL'),orient='index').astype({'elevation_m': 'float'})
     locations = pd.json_normalize(sites_df['location']).astype({'latitude': 'float','longitude':'float'})
     sites_gdf = gpd.GeoDataFrame(sites_df[['code','name','elevation_m']], geometry=gpd.points_from_xy(locations.longitude, locations.latitude))
