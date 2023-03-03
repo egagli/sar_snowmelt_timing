@@ -67,7 +67,11 @@ def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().s
         scenes = scenes.where(scenes.coords['sat:orbit_state']==orbit_direction,drop=True)
     return scenes
 
-def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),polarization='vv',resolution=20):
+<<<<<<< HEAD
+def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='vv',resolution=20):
+=======
+def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='vv',epsg=32610,resolution=20):
+>>>>>>> 16e63d18cb06309fc52e5244c38e1a851cbf6911
     '''
     Returns a Sentinel-1 SAR backscatter xarray dataset using STAC data from Planetary computer over the given time and bounding box.
 
@@ -89,7 +93,11 @@ def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today(
     bbox = bbox_gdf.total_bounds
     search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime=f"{start_time}/{end_time}", limit=1000) #remove limit if needed
     items = search.item_collection()
-    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=32610, dtype='float32',chunksize=512, resolution=resolution) #put resolution back in when fixed
+<<<<<<< HEAD
+    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=32610, dtype='float32',chunksize=512) #put resolution back in when fixed
+=======
+    stack = stackstac.stack(items, bounds_latlon=bbox, epsg=epsg, resolution=resolution)
+>>>>>>> 16e63d18cb06309fc52e5244c38e1a851cbf6911
     bounding_box_utm_gf = bbox_gdf.to_crs(stack.crs)
     xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
     
@@ -98,109 +106,9 @@ def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today(
     else:
         scenes = stack.sel(band=polarization).sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
         
-    scenes = scenes#.drop_duplicates(dim='time',keep='first')
+    scenes = scenes.drop_duplicates(dim='time',keep='first')
 
     return scenes
-
-def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31',resolution=10,epsg="EPSG:32610"):
-    import odc.stac,odc
-
-    catalog = pystac_client.Client.open(
-    "https://planetarycomputer.microsoft.com/api/stac/v1",
-    modifier=planetary_computer.sign_inplace,)
-    bbox = bbox_gdf.total_bounds
-    search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime=f"{start_time}/{end_time}",limit=1000)
-    items = search.item_collection()
-
-    ds = odc.stac.load(
-    search.get_items(), 
-    chunks={'x':512,'y':512}, 
-    #bands={"vv","vh"},
-    crs=epsg, # do we need this?
-    resolution=odc.geo.Resolution(resolution, -resolution)).where(lambda x: x > 0, other=np.nan)
-    
-    bounding_box_utm_gf = bbox_gdf.to_crs(ds.rio.crs)
-    xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
-    
-    scenes = ds.sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
-    
-    orbits = [scene.properties['sat:relative_orbit'] for scene in items.items]
-    direction = [scene.properties['sat:orbit_state'] for scene in items.items]
-    scenes = scenes.assign_coords({'sat:orbit_state':('time',direction)})
-    scenes = scenes.assign_coords({'sat:relative_orbit':('time',orbits)}).to_array(dim='band').transpose('time','band','y','x')
-    
-    scenes = scenes.assign_attrs({'resolution':resolution})
-    
-    return scenes.chunk((100,1,512,512)) # does this make things faster?
-
-def get_s1_rtc_stac_odc_mgrs_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31',resolution=10):
-    import odc.stac,odc
-    import ast
-    from odc.geo.geobox import GeoBox
-
-
-    
-    s = bbox_gdf.iloc[0] #geoseries
-
-    GEOMETRY = s.geometry.__geo_interface__
-    BOUNDS = ast.literal_eval(s.utm_bounds)
-    EPSG = str(s.epsg)
-
-    catalog = pystac_client.Client.open(
-    "https://planetarycomputer.microsoft.com/api/stac/v1",
-    modifier=planetary_computer.sign_inplace,)
-    
-    bbox = bbox_gdf.total_bounds
-    search = catalog.search(
-    collections = ['sentinel-1-rtc'],
-    intersects = GEOMETRY,
-    query={"proj:epsg": {"eq": EPSG}}, # Prevent adjacent MGRS Squares
-    sortby='+datetime', #ascending order +, descending order -
-)
-    
-    items = search.get_all_items()
-
-    gf = gpd.GeoDataFrame.from_features( items.to_dict(), crs='EPSG:4326')
-    gf['stac_id'] = [item.id for item in items]
-    gf['time'] = pd.to_datetime(gf.datetime) # Use standard xarray dimension name 'time' for index
-    gf = gf.set_index('time').tz_localize(None).sort_index()
-
-    GRID = GeoBox.from_bbox(BOUNDS, 
-                 crs=EPSG,
-                 resolution=resolution,       
-                )    
-    
-    ds = odc.stac.load(
-    items, 
-    #groupby='sat:absolute_orbit',
-    chunks={'x':512,'y':512},
-    geobox=GRID)
-    
-    ds = ds.sortby('time')
-    ds = ds.where(lambda x: x > 0, other=np.nan)
-    
-    #bounding_box_utm_gf = bbox_gdf.to_crs(ds.rio.crs)
-    #xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
-    
-    #scenes = ds.sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
-    
-    #orbits = [scene.properties['sat:relative_orbit'] for scene in items.items]
-    #direction = [scene.properties['sat:orbit_state'] for scene in items.items]
-    
-    ds = ds.assign_coords(relative_orbit=gf['sat:relative_orbit'],
-                      orbit_state=gf['sat:orbit_state'],
-                      stac_id=gf['stac_id'],
-                     )
-    
-    ds = ds.rename({'relative_orbit': 'sat:relative_orbit','orbit_state': 'sat:orbit_state'})
-    
-    da = ds.to_array(dim='band').transpose('time','band','y','x')
-    
-    da = da.assign_attrs({'resolution':resolution})
-    
-    return da 
-
-
 
 def plot_sentinel1_acquisitons(ts_ds,ax=None,start_date='2015-01-01',end_date=datetime.today().strftime('%Y-%m-%d'),textsize=8):
     
@@ -423,7 +331,14 @@ def get_worldcover(ts_ds):
     string = f'{ts_ds.rio.crs}'
     epsg_code = int(string[5:])
     
-    stack_lc = stackstac.stack(items, bounds_latlon=bbox, epsg=epsg_code, resolution=ts_ds.resolution)#ts_ds.resolution or ts_ds.rio.resolution()[0]
+<<<<<<< HEAD
+    stack_lc = stackstac.stack(items, bounds_latlon=bbox, epsg=epsg_code, resolution=ts_ds.resolution)
+=======
+    #ts_ds = ts_ds.where(ts_ds>0.005) # remove this if we fix edge of scene error
+    ts_ds = ts_ds.fillna(9999)
+    mins_info_runoff = ts_ds.argmin(dim='time',skipna=True)
+    runoff_dates = ts_ds[mins_info_runoff].time
+>>>>>>> 16e63d18cb06309fc52e5244c38e1a851cbf6911
     
     stack_lc = stack_lc.min(dim='time').squeeze()
     
@@ -432,41 +347,60 @@ def get_worldcover(ts_ds):
     
     return stack_lc
 
-def get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=6):
+def get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=4):
     year = ts_ds.time[0].dt.year.values
     unique_full_coverage = []
-    melt_season = slice(f'{year}-02-01',f'{year}-07-31')
+    melt_season = slice(f'{year}-03-01',f'{year}-08-01')
     
     for orbit in np.unique(ts_ds['sat:relative_orbit']):
+<<<<<<< HEAD
         if len(ts_ds[ts_ds['sat:relative_orbit']==orbit].sel(time=melt_season).time.values) > num_acquisitions_during_melt_season:
+=======
+        if len(ts_ds[ts_ds['sat:relative_orbit']==orbit].sel(time=melt_season).time.values) >= 4:
+            # and now check to see if scene is mostly?? full
+>>>>>>> 16e63d18cb06309fc52e5244c38e1a851cbf6911
             unique_full_coverage.append(orbit)
     unique_full_coverage = np.array(unique_full_coverage)
     
     return unique_full_coverage
 
 def get_runoff_onset(ts_ds,return_seperate_orbits_and_polarizations=False):
-    orbits = get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=8)
+    orbits = get_orbits_with_melt_season_coverage(ts_ds)
     ts_ds = ts_ds[ts_ds['sat:relative_orbit'].isin(orbits)]
     runoffs_int64 = ts_ds.groupby('sat:relative_orbit').map(lambda c: c.idxmin(dim='time')).astype(np.int64)
     
+<<<<<<< HEAD
     if return_seperate_orbits_and_polarizations==False: # if false (default), return median
-        if 'band' in runoffs_int64.dims:
-            runoffs_int64 = runoffs_int64.where(runoffs_int64>0).median(dim=['sat:relative_orbit','band'],skipna=True)
-        else:
-            runoffs_int64 = runoffs_int64.where(runoffs_int64>0).median(dim=['sat:relative_orbit'],skipna=True)
-            
+        runoffs_int64 = runoffs_int64.where(runoffs_int64>0).median(dim=['sat:relative_orbit','band'],skipna=True)
+        
     return runoffs_int64.astype('datetime64[ns]')
-
-def get_runoffs_onset(ts_ds):
-    orbits = get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=8)
-    ts_ds = ts_ds[ts_ds['sat:relative_orbit'].isin(orbits)]
-    runoffs = ts_ds.groupby('sat:relative_orbit').map(lambda c: c.idxmin(dim='time'))
-    return runoffs
 
 # def get_runoff_onset(ts_ds,return_seperate_orbits=False,return_seperate_polarizations=False,combine_orbits='median'):
 #     ts_ds = ts_ds.fillna(9999)
 #     mins_index_runoff = ts_ds.argmin(dim='time',skipna=False)
 #     runoff_dates = ts_ds[mins_index_runoff.compute()].time #this is just to establish the shape of runoff_dates #add.compute()
+=======
+    print(unique_full_coverage)
+    for orbit in unique_full_coverage:
+        ts_ds_orbit = ts_ds[ts_ds['sat:relative_orbit']==orbit]
+        #ts_ds_orbit = ts_ds_orbit.where(ts_ds_orbit.max(dim='time')>0.001)
+        mins_info_runoff = ts_ds_orbit.argmin(dim='time',skipna=True)
+        #mins_info_runoff = mins_info_runoff.where(ts_ds_orbit.all(dim='time'))
+        runoff_ds = ts_ds_orbit[mins_info_runoff].time
+        #runoff_dates.loc[:,:,orbit]= runoff_dates.loc[:,:,orbit]
+        runoff_dates.loc[:,:,orbit] = runoff_ds.where((ts_ds_orbit.sum(dim='time')>0) & (ts_ds_orbit.sum(dim='time')<9998))
+        
+        
+    if return_seperate_orbits == False:
+        #runoff_dates = runoff_dates.astype(np.int64).mean(axis=2,skipna=False).astype('datetime64[ns]') # changed to nanmean
+        runoff_dates = runoff_dates.astype(np.int64).where(runoff_dates.notnull()).mean(axis=2,skipna=True).astype('datetime64[ns]')
+    else:
+        runoff_dates = runoff_dates
+        
+    runoff_dates = runoff_dates.where(ts_ds.min(dim='time')!=9999)
+    #runoff_dates = runoff_dates.dropna(dim='orbit',how='all')
+    #runoff_dates = runoff_dates.where(ts_ds.dropna(dim='time',how='all'))
+>>>>>>> 16e63d18cb06309fc52e5244c38e1a851cbf6911
     
 
 #     unique_full_coverage = get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=4)
@@ -602,15 +536,15 @@ def plot_timeseries_by_elevation_bin(ts_ds,dem_ds,bin_size=100,ax=None,normalize
             backscatter_ts_for_bin = np.nanmean(ts_bin_ds.data.reshape(ts_bin_ds.shape[0],-1), axis=1) 
         backscatter_full.append(list(backscatter_ts_for_bin))
         
-    backscatter_df = 10*np.log10(pd.DataFrame(backscatter_full,index=bin_centers,columns=ts_ds.time))
+    backscatter_df = pd.DataFrame(backscatter_full,index=bin_centers,columns=ts_ds.time)
     
     if normalize_bins == True:
           backscatter_df = ((backscatter_df.T-backscatter_df.T.min())/(backscatter_df.T.max()-backscatter_df.T.min())).T
-    colors = ax.pcolormesh(pd.to_datetime(ts_ds.time), bin_centers, backscatter_df,cmap='inferno') #,vmin=0,vmax=0.5 # ,edgecolors=(1.0, 1.0, 1.0, 0.1)
+    colors = ax.pcolormesh(pd.to_datetime(ts_ds.time), bin_centers, backscatter_df,cmap='inferno',edgecolors=(1.0, 1.0, 1.0, 0.3)) #,vmin=0,vmax=0.5
     cbar = f.colorbar(colors,ax=ax)
     
     if normalize_bins == False:
-        lab = 'Mean Backscatter [dB]'
+        lab = 'Mean Backscatter [Watts]'
     else:
         lab = 'Normalized (Elevation-wise) Backscatter'
     
@@ -727,7 +661,7 @@ def plot_backscatter_ts_and_ndvi(ts_ds,ndvi_ds):
     plt.tight_layout()
     
 def find_closest_snotel(ts_ds):
-    import ulmo
+    
     sites_df=pd.DataFrame.from_dict(ulmo.cuahsi.wof.get_sites('https://hydroportal.cuahsi.org/Snotel/cuahsi_1_1.asmx?WSDL'),orient='index').astype({'elevation_m': 'float'})
     locations = pd.json_normalize(sites_df['location']).astype({'latitude': 'float','longitude':'float'})
     sites_gdf = gpd.GeoDataFrame(sites_df[['code','name','elevation_m']], geometry=gpd.points_from_xy(locations.longitude, locations.latitude))
