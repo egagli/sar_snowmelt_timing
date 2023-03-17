@@ -439,13 +439,14 @@ def get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_seas
     
     for orbit in np.unique(ts_ds['sat:relative_orbit']):
         if len(ts_ds[ts_ds['sat:relative_orbit']==orbit].sel(time=melt_season).time.values) > num_acquisitions_during_melt_season:
+            # if obs dont have more than a 1 month gap
             unique_full_coverage.append(orbit)
     unique_full_coverage = np.array(unique_full_coverage)
     
     return unique_full_coverage
 
-def get_runoff_onset(ts_ds,return_seperate_orbits_and_polarizations=False):
-    orbits = get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=8)
+def get_runoff_onset(ts_ds,return_seperate_orbits_and_polarizations=False, num_acquisitions_during_melt_season=8):
+    orbits = get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=num_acquisitions_during_melt_season)
     ts_ds = ts_ds[ts_ds['sat:relative_orbit'].isin(orbits)]
     runoffs_int64 = ts_ds.groupby('sat:relative_orbit').map(lambda c: c.idxmin(dim='time')).astype(np.int64)
     
