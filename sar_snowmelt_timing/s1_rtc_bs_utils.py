@@ -432,6 +432,17 @@ def get_worldcover(ts_ds):
     
     return stack_lc
 
+def get_snowmask(ts_ds):
+    
+    snow_mask = rxr.open_rasterio('../input/SnowClass/westernUS_MODIS_snow_classes_byte.tif')
+    
+    bbox = ts_ds.rio.transform_bounds(rio.crs.CRS.from_epsg(4326))
+    snow_mask_clip = snow_mask.sel(x=slice(bbox[0],bbox[2]),y=slice(bbox[3],bbox[1])).squeeze()  
+    
+    snow_mask_proj = snow_mask_clip.rio.reproject_match(ts_ds)
+    
+    return snow_mask_proj
+
 def get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=6):
     year = ts_ds.time[0].dt.year.values
     unique_full_coverage = []
