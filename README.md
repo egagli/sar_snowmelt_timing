@@ -2,9 +2,35 @@
  
  [![DOI](https://zenodo.org/badge/433593658.svg)](https://zenodo.org/badge/latestdoi/433593658)
 
-This repository contains notebooks and tools to identify snowmelt timing using timeseries analysis of backscatter of Sentinel-1 C-band SAR. This toolbox makes use of [Analysis Ready Sentinel-1 Backscatter Imagery](https://registry.opendata.aws/sentinel-1-rtc-indigo/) (Sentinel-1 RTC data) hosted on AWS managed by Indigo Ag, Inc. Special thanks to [Scott Henderson](https://github.com/scottyhq) for his [aws-rtc-stac](https://github.com/relativeorbit/aws-rtc-stac) repository which allows the creation of static STAC catalogs used in this repository. 
+This repository contains notebooks and tools to identify snowmelt timing using timeseries analysis of backscatter of Sentinel-1 C-band SAR. The newer tools in this toolbox use the [Sentinel 1 Radiometrically Terrain Corrected (RTC)](https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc) product hosted on Microsoft Planetary Computer.
 
 Please see the [examples folder](https://github.com/egagli/sar_snow_melt_timing/tree/main/examples) for notebooks that demonstrate example analysis that can be done using this toolbox. Check out the rendered notebooks using [nbviewer](https://nbviewer.org/github/egagli/sar_snow_melt_timing/tree/main/examples/). 
+
+Originally, this toolbox made use of [Analysis Ready Sentinel-1 Backscatter Imagery](https://registry.opendata.aws/sentinel-1-rtc-indigo/) (Sentinel-1 RTC data) hosted on AWS managed by Indigo Ag, Inc. 
+
+
+## Example: Large scale processing of snowmelt runoff onset
+
+
+<img width="899" alt="largescale" src="https://user-images.githubusercontent.com/67975937/231564758-e6d8a526-f723-44c9-b788-58a50a879750.png">
+
+Screenshot of interactive snowmelt runoff onset map of the western US hosted [here](https://egagli.github.io/view_sar_snowmelt_timing_map/). Code to process individual MGRS tiles in [process_mgrs.ipynb](https://github.com/egagli/sar_snowmelt_timing/blob/main/examples/process_mgrs.ipynb). Built the interactive map using [this](https://github.com/egagli/view_sar_snowmelt_timing_map) repository, based on [Scott Henderson's template](https://github.com/scottyhq/share-a-raster). 
+
+## Example: visualize_all_volcanoes.ipynb
+
+A study of snowmelt runoff onset on stratovcolcanoes in the Cascade Range: [visualize_all_volcanoes.ipynb](https://github.com/egagli/sar_snow_melt_timing/blob/main/examples/visualize_all_volcanoes.ipynb) [[nbviewer link](https://nbviewer.org/github/egagli/sar_snow_melt_timing/blob/main/examples/visualize_all_volcanoes.ipynb)].
+
+<img width="1092" alt="volc_ts" src="https://user-images.githubusercontent.com/67975937/231563176-1ce6ab96-91a1-49d7-bfad-2ffa736b3308.png">
+
+A) Yearly Snowmelt Runoff Onset Maps for 10 Cascade Stratovolcanoes. B) Median snowmelt runoff onset at each elevation bin per year.
+
+<img width="475" alt="fig4" src="https://user-images.githubusercontent.com/67975937/231562828-d56068c9-82f0-46b8-ba2c-68ff93fd2239.png">
+
+A) 2015-2022 median snowmelt runoff onset maps. B) Median snowmelt runoff onset at each elevation bin with +/- 1 standard deviation.
+
+
+
+
 
 
 ## Example: demonstrate_all_functions.ipynb
