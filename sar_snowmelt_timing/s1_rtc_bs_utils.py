@@ -27,6 +27,8 @@ import shapely
 import scipy
 import contextily as ctx
 import planetary_computer
+from pathlib import Path
+import s1_rtc_bs_utils
 
 
 def get_s1_rtc_stac(bbox_gdf,start_time='2015-01-01',end_time=datetime.today().strftime('%Y-%m-%d'),orbit_direction='all',polarization='gamma0_vv',collection='mycollection.json'):
@@ -405,8 +407,33 @@ def get_dah(ts_ds):
 
 def get_worldcover(ts_ds):
     
-    bbox = ts_ds.rio.transform_bounds(rio.crs.CRS.from_epsg(4326))
+#     bbox = ts_ds.rio.transform_bounds(rio.crs.CRS.from_epsg(4326))
     
+#     catalog = pystac_client.Client.open(
+#     "https://planetarycomputer.microsoft.com/api/stac/v1",
+#     modifier=planetary_computer.sign_inplace,
+#     )
+
+#     search = catalog.search(
+#     collections=["esa-worldcover"],
+#     bbox=bbox,
+#     )
+
+#     items = list(search.get_items())
+#     #print(f"Returned {len(items)} Items")
+
+#     string = f'{ts_ds.rio.crs}'
+#     epsg_code = int(string[5:])
+    
+#     stack_lc = stackstac.stack(items, bounds_latlon=bbox, epsg=epsg_code, resolution=ts_ds.resolution)#ts_ds.resolution or ts_ds.rio.resolution()[0]
+    
+#     stack_lc = stack_lc.min(dim='time').squeeze()
+    
+#     stack_lc = stack_lc.rio.write_crs(ts_ds.rio.crs)
+#     stack_lc = stack_lc.rio.reproject_match(ts_ds)
+    import odc.stac
+    bbox = ts_ds.rio.transform_bounds(rio.crs.CRS.from_epsg(4326))
+
     catalog = pystac_client.Client.open(
     "https://planetarycomputer.microsoft.com/api/stac/v1",
     modifier=planetary_computer.sign_inplace,
@@ -422,20 +449,22 @@ def get_worldcover(ts_ds):
 
     string = f'{ts_ds.rio.crs}'
     epsg_code = int(string[5:])
-    
-    stack_lc = stackstac.stack(items, bounds_latlon=bbox, epsg=epsg_code, resolution=ts_ds.resolution)#ts_ds.resolution or ts_ds.rio.resolution()[0]
-    
-    stack_lc = stack_lc.min(dim='time').squeeze()
-    
-    stack_lc = stack_lc.rio.write_crs(ts_ds.rio.crs)
+
+    stack_lc = odc.stac.load(items, epsg=epsg_code, bbox=bbox, resolution=0.0001)#ts_ds.resolution or ts_ds.rio.resolution()[0]
+    stack_lc = stack_lc['map'].min(dim='time').squeeze()
+    #stack_lc = stack_lc.rename({'longitude': 'x','latitude': 'y'})
+    #stack_lc = stack_lc.rio.write_crs(ts_ds.rio.crs)
     stack_lc = stack_lc.rio.reproject_match(ts_ds)
     
     return stack_lc
 
 def get_snowmask(ts_ds):
     
-    snow_mask = rxr.open_rasterio('../input/SnowClass/westernUS_MODIS_snow_classes_byte.tif')
+
+    fn = Path(Path(os.path.abspath(s1_rtc_bs_utils.__file__)).parent.parent, 
+     'input/SnowClass/westernUS_MODIS_snow_classes_byte.tif').as_posix()
     
+    snow_mask = rxr.open_rasterio(fn)
     bbox = ts_ds.rio.transform_bounds(rio.crs.CRS.from_epsg(4326))
     snow_mask_clip = snow_mask.sel(x=slice(bbox[0],bbox[2]),y=slice(bbox[3],bbox[1])).squeeze()  
     
@@ -456,9 +485,22 @@ def get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_seas
     
     return unique_full_coverage
 
+def remove_border_noise(ts_ds):
+    try: 
+        ts_ds = ts_ds.where(ts_ds.sel(band='vv')>0.001)
+    except:
+        ts_ds = ts_ds.where(ts_ds>0.001)
+    return ts_ds
+
 def get_runoff_onset(ts_ds,return_seperate_orbits_and_polarizations=False, num_acquisitions_during_melt_season=8):
+    
+    #for pol in list(ts_ds.band.values):
     orbits = get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=num_acquisitions_during_melt_season)
+        #print(orbits)
     ts_ds = ts_ds[ts_ds['sat:relative_orbit'].isin(orbits)]
+    
+    ts_ds = remove_border_noise(ts_ds)
+    
     runoffs_int64 = ts_ds.groupby('sat:relative_orbit').map(lambda c: c.idxmin(dim='time')).astype(np.int64)
     
     if return_seperate_orbits_and_polarizations==False: # if false (default), return median
@@ -596,7 +638,7 @@ def get_stats(ts_ds,multiple_years=False,dem=None,aspect=None,slope=None,dah=Non
 
 
 
-def plot_timeseries_by_elevation_bin(ts_ds,dem_ds,bin_size=100,ax=None,normalize_bins=False):
+def plot_timeseries_by_elevation_bin(ts_ds,dem_ds,bin_size=100,ax=None,normalize_bins=False, add_line=False,add_colorbar=True):
     if ax is None:
         ax = plt.gca()
     f = plt.gcf()
@@ -611,22 +653,31 @@ def plot_timeseries_by_elevation_bin(ts_ds,dem_ds,bin_size=100,ax=None,normalize
         ts_bin_ds = ts_ds.where(np.abs(dem_projected_ds - bin_center) < bin_size//2)
         with warnings.catch_warnings(): #catches np.nanmean empty slices
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            backscatter_ts_for_bin = np.nanmean(ts_bin_ds.data.reshape(ts_bin_ds.shape[0],-1), axis=1) 
+            backscatter_ts_for_bin = np.nanmedian(ts_bin_ds.data.reshape(ts_bin_ds.shape[0],-1), axis=1) # can choose mean or median 
         backscatter_full.append(list(backscatter_ts_for_bin))
         
     backscatter_df = 10*np.log10(pd.DataFrame(backscatter_full,index=bin_centers,columns=ts_ds.time))
     
+    
+    
     if normalize_bins == True:
           backscatter_df = ((backscatter_df.T-backscatter_df.T.min())/(backscatter_df.T.max()-backscatter_df.T.min())).T
     colors = ax.pcolormesh(pd.to_datetime(ts_ds.time), bin_centers, backscatter_df,cmap='inferno') #,vmin=0,vmax=0.5 # ,edgecolors=(1.0, 1.0, 1.0, 0.1)
-    cbar = f.colorbar(colors,ax=ax)
+    
+    if add_colorbar:
+        cbar = f.colorbar(colors,ax=ax)
     
     if normalize_bins == False:
         lab = 'Mean Backscatter [dB]'
     else:
         lab = 'Normalized (Elevation-wise) Backscatter'
     
-    cbar.ax.set_ylabel(lab, rotation=90, labelpad=15)
+    if add_line == True:
+        mins = pd.DataFrame(backscatter_full,index=bin_centers,columns=ts_ds.time).idxmin(axis=1)
+        ax.plot(mins.values,mins.index,color='white',linestyle='--',alpha=0.5)
+    
+    if add_colorbar:
+        cbar.ax.set_ylabel(lab, rotation=90, labelpad=15)
 
     ax.set_xlabel('Time')
     ax.set_ylabel('Elevation [m]')
