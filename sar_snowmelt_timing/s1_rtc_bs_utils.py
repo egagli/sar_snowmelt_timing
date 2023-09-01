@@ -405,10 +405,35 @@ def get_dah(ts_ds):
     DAH_reproject = DAH.rio.reproject_match(ts_ds)
     return DAH_reproject
 
-def get_worldcover(ts_ds):
+# def get_worldcover(ts_ds):
     
+# #     bbox = ts_ds.rio.transform_bounds(rio.crs.CRS.from_epsg(4326))
+    
+# #     catalog = pystac_client.Client.open(
+# #     "https://planetarycomputer.microsoft.com/api/stac/v1",
+# #     modifier=planetary_computer.sign_inplace,
+# #     )
+
+# #     search = catalog.search(
+# #     collections=["esa-worldcover"],
+# #     bbox=bbox,
+# #     )
+
+# #     items = list(search.get_items())
+# #     #print(f"Returned {len(items)} Items")
+
+# #     string = f'{ts_ds.rio.crs}'
+# #     epsg_code = int(string[5:])
+    
+# #     stack_lc = stackstac.stack(items, bounds_latlon=bbox, epsg=epsg_code, resolution=ts_ds.resolution)#ts_ds.resolution or ts_ds.rio.resolution()[0]
+    
+# #     stack_lc = stack_lc.min(dim='time').squeeze()
+    
+# #     stack_lc = stack_lc.rio.write_crs(ts_ds.rio.crs)
+# #     stack_lc = stack_lc.rio.reproject_match(ts_ds)
+#     import odc.stac
 #     bbox = ts_ds.rio.transform_bounds(rio.crs.CRS.from_epsg(4326))
-    
+
 #     catalog = pystac_client.Client.open(
 #     "https://planetarycomputer.microsoft.com/api/stac/v1",
 #     modifier=planetary_computer.sign_inplace,
@@ -424,46 +449,51 @@ def get_worldcover(ts_ds):
 
 #     string = f'{ts_ds.rio.crs}'
 #     epsg_code = int(string[5:])
-    
-#     stack_lc = stackstac.stack(items, bounds_latlon=bbox, epsg=epsg_code, resolution=ts_ds.resolution)#ts_ds.resolution or ts_ds.rio.resolution()[0]
-    
-#     stack_lc = stack_lc.min(dim='time').squeeze()
-    
-#     stack_lc = stack_lc.rio.write_crs(ts_ds.rio.crs)
-#     stack_lc = stack_lc.rio.reproject_match(ts_ds)
-    import odc.stac
-    bbox = ts_ds.rio.transform_bounds(rio.crs.CRS.from_epsg(4326))
 
+#     print(epsg_code)
+#     stack_lc = odc.stac.load(search.get_items(), epsg=epsg_code, bbox=bbox, resolution=ts_ds.resolution)#ts_ds.resolution or ts_ds.rio.resolution()[0]
+#     #stack_lc = stack_lc['map'].min(dim='time').squeeze()
+    
+#     return stack_lc
+#     #stack_lc = stack_lc.rename({'longitude': 'x','latitude': 'y'})
+#     #stack_lc = stack_lc.rio.write_crs(ts_ds.rio.crs)
+#     #stack_lc = stack_lc.rio.reproject_match(ts_ds)
+    
+#     #return stack_lc
+
+def get_worldcover(ts_ds):
+    # to get 2020 WC, change time=-1 to time=0
+    import odc.stac
+    
+    bbox = ts_ds.rio.transform_bounds(rio.crs.CRS.from_epsg(4326))
+    
     catalog = pystac_client.Client.open(
     "https://planetarycomputer.microsoft.com/api/stac/v1",
-    modifier=planetary_computer.sign_inplace,
-    )
+    modifier=planetary_computer.sign_inplace,)
 
     search = catalog.search(
     collections=["esa-worldcover"],
-    bbox=bbox,
-    )
+    bbox=bbox,)
 
-    items = list(search.get_items())
-    #print(f"Returned {len(items)} Items")
 
     string = f'{ts_ds.rio.crs}'
     epsg_code = int(string[5:])
 
-    stack_lc = odc.stac.load(items, epsg=epsg_code, bbox=bbox, resolution=0.0001)#ts_ds.resolution or ts_ds.rio.resolution()[0]
-    stack_lc = stack_lc['map'].min(dim='time').squeeze()
-    #stack_lc = stack_lc.rename({'longitude': 'x','latitude': 'y'})
-    #stack_lc = stack_lc.rio.write_crs(ts_ds.rio.crs)
-    stack_lc = stack_lc.rio.reproject_match(ts_ds)
+
+    stack_lc = odc.stac.load(search.get_items(),crs=epsg_code,resolution=ts_ds.resolution,bbox=bbox,bands=["map"]).isel(time=-1)
+    stack_lc = stack_lc['map'].rio.reproject_match(ts_ds)
     
     return stack_lc
 
 def get_snowmask(ts_ds):
     
 
+    #fn = Path(Path(os.path.abspath(s1_rtc_bs_utils.__file__)).parent.parent, 
+    # 'input/SnowClass/westernUS_MODIS_snow_classes_byte.tif').as_posix()
+
     fn = Path(Path(os.path.abspath(s1_rtc_bs_utils.__file__)).parent.parent, 
-     'input/SnowClass/westernUS_MODIS_snow_classes_byte.tif').as_posix()
-    
+     'input/SnowClass/global_MODIS_snow_classes_byte.tif').as_posix()
+        
     snow_mask = rxr.open_rasterio(fn)
     bbox = ts_ds.rio.transform_bounds(rio.crs.CRS.from_epsg(4326))
     snow_mask_clip = snow_mask.sel(x=slice(bbox[0],bbox[2]),y=slice(bbox[3],bbox[1])).squeeze()  
@@ -478,7 +508,7 @@ def get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_seas
     melt_season = slice(f'{year}-02-01',f'{year}-07-31')
     
     for orbit in np.unique(ts_ds['sat:relative_orbit']):
-        if len(ts_ds[ts_ds['sat:relative_orbit']==orbit].sel(time=melt_season).time.values) > num_acquisitions_during_melt_season:
+        if len(ts_ds[ts_ds['sat:relative_orbit'].compute()==orbit].sel(time=melt_season).time.values) > num_acquisitions_during_melt_season:
             # if obs dont have more than a 1 month gap
             unique_full_coverage.append(orbit)
     unique_full_coverage = np.array(unique_full_coverage)
@@ -497,7 +527,7 @@ def get_runoff_onset(ts_ds,return_seperate_orbits_and_polarizations=False, num_a
     #for pol in list(ts_ds.band.values):
     orbits = get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=num_acquisitions_during_melt_season)
         #print(orbits)
-    ts_ds = ts_ds[ts_ds['sat:relative_orbit'].isin(orbits)]
+    ts_ds = ts_ds[ts_ds['sat:relative_orbit'].isin(orbits).compute()]
     
     ts_ds = remove_border_noise(ts_ds)
     
