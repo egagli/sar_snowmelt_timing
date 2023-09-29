@@ -4,8 +4,8 @@ authors:
   - family-names: "Gagliano"
     given-names: "Eric"
     orcid: "https://orcid.org/0000-0002-4362-6260"
-title: "SAR Snowmelt Timing"
-version: 1.1.0
+title: "SAR Snowmelt Timing Toolbox"
+version: 1.0.0
 doi: 10.5281/zenodo.7964286
-date-released: 2023-05-23
+date-released: 2022-10-20
 url: "https://github.com/egagli/sar_snowmelt_timing"
