@@ -5,7 +5,7 @@ authors:
     given-names: "Eric"
     orcid: "https://orcid.org/0000-0002-4362-6260"
 title: "SAR Snowmelt Timing"
-version: 0.1.0
+version: 1.1.0
 doi: 10.5281/zenodo.7964286
-date-released: 2021-10-28
-url: "https://github.com/SnowEx/sar_snowmelt_timing"
+date-released: 2023-05-23
+url: "https://github.com/egagli/sar_snowmelt_timing"
