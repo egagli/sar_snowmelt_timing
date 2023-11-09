@@ -8,7 +8,9 @@ Please see the [examples folder](https://github.com/egagli/sar_snow_melt_timing/
 
 Originally, this toolbox made use of [Analysis Ready Sentinel-1 Backscatter Imagery](https://registry.opendata.aws/sentinel-1-rtc-indigo/) (Sentinel-1 RTC data) hosted on AWS managed by Indigo Ag, Inc. 
 
-I'm currently in the process of cleaning up this repo, adding new starter code, and making these tools pip installable.
+I'm currently in the process of cleaning up this repo, adding new starter code, and making these tools pip installable. 
+
+**Check out the quickstart heading below to get started!**
 
 ## Geophysical Research Letters paper: Capturing the Onset of Mountain Snowmelt Runoff Using Satellite Synthetic Aperture Radar
 
@@ -25,6 +27,12 @@ Check out the paper that introduces this toolbox [here](https://doi.org/10.1029/
 <img width="899" alt="largescale" src="https://user-images.githubusercontent.com/67975937/231564758-e6d8a526-f723-44c9-b788-58a50a879750.png">
 
 Screenshot of interactive snowmelt runoff onset map of the western US hosted [here](https://egagli.github.io/view_sar_snowmelt_timing_map/). Code to process individual MGRS tiles in [process_mgrs.ipynb](https://github.com/egagli/sar_snowmelt_timing/blob/main/examples/process_mgrs.ipynb). Built the interactive map using [this](https://github.com/egagli/view_sar_snowmelt_timing_map) repository, based on [Scott Henderson's template](https://github.com/scottyhq/share-a-raster). 
+
+## Quickstart
+![quickstart](https://github.com/egagli/sar_snowmelt_timing/assets/67975937/58a68fc0-54bb-4fcc-ba8f-f4eda67a0ae1)
+
+Check out the [intro_example.ipynb](https://github.com/egagli/sar_snowmelt_timing/blob/main/examples/intro_example.ipynb) notebook for a simple use case!
+
 
 ## (OLD) Example: visualize_all_volcanoes.ipynb
 
