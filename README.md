@@ -11,6 +11,7 @@ Originally, this toolbox made use of [Analysis Ready Sentinel-1 Backscatter Imag
 
 ## Example: Large scale processing of snowmelt runoff onset
 
+![snowmelt_timing_interactive](https://github.com/egagli/sar_snowmelt_timing/assets/67975937/8f1d70cb-bc7d-4419-9cee-2bd3a178b790)
 
 <img width="899" alt="largescale" src="https://user-images.githubusercontent.com/67975937/231564758-e6d8a526-f723-44c9-b788-58a50a879750.png">
 
