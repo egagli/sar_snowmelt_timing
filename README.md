@@ -4,13 +4,12 @@
 
 This repository contains notebooks and tools to identify snowmelt timing using timeseries analysis of backscatter of Sentinel-1 C-band SAR. The newer tools in this toolbox use the [Sentinel 1 Radiometrically Terrain Corrected (RTC)](https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc) product hosted on Microsoft Planetary Computer.
 
-Please see the [examples folder](https://github.com/egagli/sar_snow_melt_timing/tree/main/examples) for notebooks that demonstrate example analysis that can be done using this toolbox. Check out the rendered notebooks using [nbviewer](https://nbviewer.org/github/egagli/sar_snow_melt_timing/tree/main/examples/). 
+**Check out the quickstart heading below to get started!** For more advanced use cases, please see the [examples folder](https://github.com/egagli/sar_snow_melt_timing/tree/main/examples) for notebooks that demonstrate example analysis that can be done using this toolbox. Check out the rendered notebooks using [nbviewer](https://nbviewer.org/github/egagli/sar_snow_melt_timing/tree/main/examples/). 
 
 Originally, this toolbox made use of [Analysis Ready Sentinel-1 Backscatter Imagery](https://registry.opendata.aws/sentinel-1-rtc-indigo/) (Sentinel-1 RTC data) hosted on AWS managed by Indigo Ag, Inc. 
 
 I'm currently in the process of cleaning up this repo, adding new starter code, and making these tools pip installable. 
 
-**Check out the quickstart heading below to get started!**
 
 ## Geophysical Research Letters paper: Capturing the Onset of Mountain Snowmelt Runoff Using Satellite Synthetic Aperture Radar
 
