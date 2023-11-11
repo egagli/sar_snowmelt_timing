@@ -25,9 +25,8 @@ Slight correction: In the plain language summary, the version of record contains
 This should be:
 
 - "Finally, from 2016 to 2022, we documented a shift toward snowmelt happening **later** in the year, which means **later** spring flow in rivers."
-to be consistent with our findings and the rest of our text.
 
-My apologies for the oversight. -eric
+to be consistent with our findings and the rest of our text. My apologies for the oversight. -eric
 
 
 ## Example: Large scale processing of snowmelt runoff onset
