@@ -104,7 +104,7 @@ def get_s1_rtc_stac_pc(bbox_gdf,start_time='2014-01-01',end_time=datetime.today(
 
     return scenes
 
-def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31',resolution=10,epsg="EPSG:32610"):
+def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31',resolution=10,epsg="EPSG:32610", resampling=None):
     import odc.stac,odc
 
     catalog = pystac_client.Client.open(
@@ -118,6 +118,40 @@ def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31
     search.get_items(), 
     chunks={'x':512,'y':512}, 
     #bands={"vv","vh"},
+    groupby = 'sat:absolute_orbit',
+    crs=epsg, # do we need this?
+    resampling=resampling,
+    resolution=odc.geo.Resolution(resolution, -resolution)).where(lambda x: x > 0, other=np.nan)
+    
+    bounding_box_utm_gf = bbox_gdf.to_crs(ds.rio.crs)
+    xmin, ymax, xmax, ymin = bounding_box_utm_gf.bounds.values[0]
+    
+    scenes = ds.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sortby('time')
+    
+    df = gpd.GeoDataFrame.from_features(items.to_dict())
+    df = df.groupby(['sat:absolute_orbit']).first().sort_values('datetime')
+
+    scenes = scenes.assign_coords({'sat:orbit_state':('time',df['sat:orbit_state'])})
+    scenes = scenes.assign_coords({'sat:relative_orbit':('time',df['sat:relative_orbit'].astype('int16'))}).to_array(dim='band').transpose('time','band','y','x')
+    
+    scenes = scenes.assign_attrs({'resolution':resolution})
+    
+    return scenes.chunk((100,1,512,512)) # does this make things faster?
+
+def get_s1_rtc_stac_odc_pc_vvvh(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31',resolution=10,epsg="EPSG:32610"):
+    import odc.stac,odc
+
+    catalog = pystac_client.Client.open(
+    "https://planetarycomputer.microsoft.com/api/stac/v1",
+    modifier=planetary_computer.sign_inplace,)
+    bbox = bbox_gdf.total_bounds
+    search = catalog.search(collections=["sentinel-1-rtc"], bbox=bbox, datetime=f"{start_time}/{end_time}",limit=1000)
+    items = search.item_collection()
+
+    ds = odc.stac.load(
+    search.get_items(), 
+    chunks={'x':512,'y':512}, 
+    bands=["vv","vh"],
     crs=epsg, # do we need this?
     resolution=odc.geo.Resolution(resolution, -resolution)).where(lambda x: x > 0, other=np.nan)
     
@@ -127,11 +161,14 @@ def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31
     scenes = ds.sel(x=slice(xmin,xmax),y=slice(ymin,ymax))
     
     orbits = [scene.properties['sat:relative_orbit'] for scene in items.items]
+    orbits_abs = [scene.properties['sat:absolute_orbit'] for scene in items.items]
     direction = [scene.properties['sat:orbit_state'] for scene in items.items]
     scenes = scenes.assign_coords({'sat:orbit_state':('time',direction)})
-    scenes = scenes.assign_coords({'sat:relative_orbit':('time',orbits)}).to_array(dim='band').transpose('time','band','y','x')
+    scenes = scenes.assign_coords({'sat:relative_orbit':('time',orbits)})
+    scenes = scenes.assign_coords({'sat:absolute_orbit':('time',orbits_abs)}).to_array(dim='band').transpose('time','band','y','x')
     
     scenes = scenes.assign_attrs({'resolution':resolution})
+    #scenes = scenes.groupby('sat:absolute_orbit').first()
     
     return scenes.chunk((100,1,512,512)) # does this make things faster?
 
@@ -481,7 +518,7 @@ def get_worldcover(ts_ds):
 
 
     stack_lc = odc.stac.load(search.get_items(),crs=epsg_code,resolution=ts_ds.resolution,bbox=bbox,bands=["map"]).isel(time=-1)
-    stack_lc = stack_lc['map'].rio.reproject_match(ts_ds)
+    stack_lc = stack_lc['map'].rio.reproject_match(ts_ds, Resampling = rio.enums.Resampling.mode)
     
     return stack_lc
 
@@ -503,6 +540,7 @@ def get_snowmask(ts_ds):
     return snow_mask_proj
 
 def get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=6):
+    # NEED TO SEPERATE OUT VALID ORBITS FOR VV AND VH
     year = ts_ds.time[0].dt.year.values
     unique_full_coverage = []
     melt_season = slice(f'{year}-02-01',f'{year}-07-31')
@@ -523,7 +561,7 @@ def remove_border_noise(ts_ds):
     return ts_ds
 
 def get_runoff_onset(ts_ds,return_seperate_orbits_and_polarizations=False, num_acquisitions_during_melt_season=8):
-    
+    # NEED TO SEPERATE OUT VALID ORBITS FOR VV AND VH
     #for pol in list(ts_ds.band.values):
     orbits = get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_season=num_acquisitions_during_melt_season)
         #print(orbits)
