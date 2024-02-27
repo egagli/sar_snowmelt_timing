@@ -121,6 +121,7 @@ def get_s1_rtc_stac_odc_pc(bbox_gdf,start_time='2019-01-01',end_time='2019-12-31
     groupby = 'sat:absolute_orbit',
     crs=epsg, # do we need this?
     resampling=resampling,
+    fail_on_error = False,
     resolution=odc.geo.Resolution(resolution, -resolution)).where(lambda x: x > 0, other=np.nan)
     
     bounding_box_utm_gf = bbox_gdf.to_crs(ds.rio.crs)
@@ -295,12 +296,12 @@ def get_median_ndvi(ts_ds,start_time='2020-07-30',end_time='2020-09-09'):
     lon = (lower_lon + upper_lon)/2
     lat = (lower_lat + upper_lat)/2
     
-    URL = "https://earth-search.aws.element84.com/v0"
+    URL = "https://earth-search.aws.element84.com/v1"
     catalog = pystac_client.Client.open(URL)
     
     items = catalog.search(
     intersects=dict(type="Point", coordinates=[lon, lat]),
-    collections=["sentinel-s2-l2a-cogs"],
+    collections=["sentinel-2-l2a"],
     datetime=f"{start_time}/{end_time}").get_all_items()
     
     string = f'{ts_ds.rio.crs}'
@@ -317,7 +318,7 @@ def get_median_ndvi(ts_ds,start_time='2020-07-30',end_time='2020-09-09'):
     cloud_cover_threshold = 20
     lowcloud = stack[stack["eo:cloud_cover"] < cloud_cover_threshold]
 
-    nir, red, = lowcloud.sel(band="B08"), lowcloud.sel(band="B04")
+    nir, red, = lowcloud.sel(band="nir"), lowcloud.sel(band="red")
     ndvi = (nir-red)/(nir+red)
     
     #if np.unique(ndvi['proj:epsg']).size>1:
@@ -498,7 +499,7 @@ def get_dah(ts_ds):
     
 #     #return stack_lc
 
-def get_worldcover(ts_ds):
+def get_worldcover(ts_ds, return_classmap=False):
     # to get 2020 WC, change time=-1 to time=0
     import odc.stac
     
@@ -511,6 +512,14 @@ def get_worldcover(ts_ds):
     search = catalog.search(
     collections=["esa-worldcover"],
     bbox=bbox,)
+    
+    items = list(search.get_items())
+    class_list = items[0].assets["map"].extra_fields["classification:classes"]
+    classmap = {
+        c["value"]: {"description": c["description"], "hex": c["color-hint"]}
+        for c in class_list
+    }
+
 
 
     string = f'{ts_ds.rio.crs}'
@@ -520,7 +529,10 @@ def get_worldcover(ts_ds):
     stack_lc = odc.stac.load(search.get_items(),crs=epsg_code,resolution=ts_ds.resolution,bbox=bbox,bands=["map"]).isel(time=-1)
     stack_lc = stack_lc['map'].rio.reproject_match(ts_ds, Resampling = rio.enums.Resampling.mode)
     
-    return stack_lc
+    if return_classmap == False:
+        return stack_lc
+    else:
+        return stack_lc, classmap
 
 def get_snowmask(ts_ds):
     
@@ -554,10 +566,10 @@ def get_orbits_with_melt_season_coverage(ts_ds,num_acquisitions_during_melt_seas
     return unique_full_coverage
 
 def remove_border_noise(ts_ds):
-    try: 
-        ts_ds = ts_ds.where(ts_ds.sel(band='vv')>0.001)
-    except:
-        ts_ds = ts_ds.where(ts_ds>0.001)
+    #try: 
+    #    ts_ds = ts_ds.where(ts_ds.sel(band='vv')>0.001)
+    #except:
+    ts_ds = ts_ds.where(ts_ds>0.006)
     return ts_ds
 
 def get_runoff_onset(ts_ds,return_seperate_orbits_and_polarizations=False, num_acquisitions_during_melt_season=8):
