@@ -358,12 +358,12 @@ def get_median_ndwi(ts_ds,start_time='2020-01-01',end_time='2020-02-15'):
     lon = (lower_lon + upper_lon)/2
     lat = (lower_lat + upper_lat)/2
     
-    URL = "https://earth-search.aws.element84.com/v0"
+    URL = "https://earth-search.aws.element84.com/v1"
     catalog = pystac_client.Client.open(URL)
     
     items = catalog.search(
     intersects=dict(type="Point", coordinates=[lon, lat]),
-    collections=["sentinel-s2-l2a-cogs"],
+    collections=["sentinel-2-l2a"],
     datetime=f"{start_time}/{end_time}").get_all_items()
     
     string = f'{ts_ds.rio.crs}'
@@ -380,7 +380,7 @@ def get_median_ndwi(ts_ds,start_time='2020-01-01',end_time='2020-02-15'):
     cloud_cover_threshold = 20
     lowcloud = stack[stack["eo:cloud_cover"] < cloud_cover_threshold]
 
-    nir, red, = lowcloud.sel(band="B03"), lowcloud.sel(band="B08")
+    nir, red, = lowcloud.sel(band="green"), lowcloud.sel(band="nir")
     ndvi = (nir-red)/(nir+red)
     
     #if np.unique(ndvi['proj:epsg']).size>1:
@@ -983,12 +983,12 @@ def get_s2_ndsi(ts_ds,cloud_cover_threshold=20):
     start_time = pd.to_datetime(ts_ds.time[0].values).strftime('%Y-%m-%d')
     end_time = pd.to_datetime(ts_ds.time[-1].values).strftime('%Y-%m-%d')
     
-    URL = "https://earth-search.aws.element84.com/v0"
+    URL = "https://earth-search.aws.element84.com/v1"
     catalog = pystac_client.Client.open(URL)
     
     items = catalog.search(
     intersects=dict(type="Point", coordinates=[lon, lat]),
-    collections=["sentinel-s2-l2a-cogs"],
+    collections=["sentinel-2-l2a"],
     datetime=f"{start_time}/{end_time}").get_all_items()
 
     string = f'{ts_ds.rio.crs}'
@@ -1006,7 +1006,7 @@ def get_s2_ndsi(ts_ds,cloud_cover_threshold=20):
     lowcloud = lowcloud
     #lowcloud = lowcloud.drop_duplicates("time","first")
     # snow.groupby(snow.time.dt.date).mean() use this for groupby date
-    vir, swir = lowcloud.sel(band="B03"), lowcloud.sel(band="B11")
+    vir, swir = lowcloud.sel(band="green"), lowcloud.sel(band="swir16")
     ndsi = (vir-swir)/(vir+swir)    
     
         
@@ -1045,12 +1045,12 @@ def get_s2_ndwi(ts_ds,cloud_cover_threshold=20,start_time=None,end_time=None):
     if end_time == None:
         end_time = pd.to_datetime(ts_ds.time[-1].values).strftime('%Y-%m-%d')
     
-    URL = "https://earth-search.aws.element84.com/v0"
+    URL = "https://earth-search.aws.element84.com/v1"
     catalog = pystac_client.Client.open(URL)
     
     items = catalog.search(
     intersects=dict(type="Point", coordinates=[lon, lat]),
-    collections=["sentinel-s2-l2a-cogs"],
+    collections=["sentinel-2-l2a"],
     datetime=f"{start_time}/{end_time}").get_all_items()
 
     string = f'{ts_ds.rio.crs}'
@@ -1068,7 +1068,7 @@ def get_s2_ndwi(ts_ds,cloud_cover_threshold=20,start_time=None,end_time=None):
     lowcloud = lowcloud
     #lowcloud = lowcloud.drop_duplicates("time","first")
     # snow.groupby(snow.time.dt.date).mean() use this for groupby date
-    vir, swir = lowcloud.sel(band="B08"), lowcloud.sel(band="B12")
+    vir, swir = lowcloud.sel(band="nir"), lowcloud.sel(band="swir22")
     ndwi = (vir-swir)/(vir+swir)    
     
         
@@ -1105,12 +1105,12 @@ def get_s2_rgb(ts_ds,cloud_cover_threshold=20):
     start_time = pd.to_datetime(ts_ds.time[0].values).strftime('%Y-%m-%d')
     end_time = pd.to_datetime(ts_ds.time[-1].values).strftime('%Y-%m-%d')
     
-    URL = "https://earth-search.aws.element84.com/v0"
+    URL = "https://earth-search.aws.element84.com/v1"
     catalog = pystac_client.Client.open(URL)
     
     items = catalog.search(
     intersects=dict(type="Point", coordinates=[lon, lat]),
-    collections=["sentinel-s2-l2a-cogs"],
+    collections=["sentinel-2-l2a"],
     datetime=f"{start_time}/{end_time}").get_all_items()
     
     string = f'{ts_ds.rio.crs}'
@@ -1129,7 +1129,7 @@ def get_s2_rgb(ts_ds,cloud_cover_threshold=20):
     lowcloud = lowcloud
     #lowcloud = lowcloud.drop_duplicates("time","first")
     # snow.groupby(snow.time.dt.date).mean() use this for groupby date
-    rgb = lowcloud.sel(band=["B04","B03","B02"])
+    rgb = lowcloud.sel(band=["red","green","blue"])
     
     time_slice = slice(start_time,end_time)
     scenes_rgb = rgb.sel(x=slice(xmin,xmax),y=slice(ymin,ymax)).sel(time=time_slice)
