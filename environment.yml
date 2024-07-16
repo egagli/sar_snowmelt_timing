@@ -1,0 +1,30 @@
+name: sar_snowmelt_timing
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+ - python=3.10
+ - numpy
+ - pandas
+ - xarray
+ - bottleneck
+ - zarr
+ - matplotlib
+ - dask
+ - gdal
+ - rasterio
+ - rioxarray
+ - geopandas
+ - geodatasets
+ - shapely
+ - contextily
+ - ipykernel
+ - pystac-client
+ - planetary-computer
+ - odc-stac
+ - pip
+ - coiled
+ 
+ - pip:
+   - matplotlib-scalebar
+   - "--editable=git+https://github.com/egagli/easysnowdata.git#egg=easysnowdata"
