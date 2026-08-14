@@ -2,6 +2,9 @@
  
  [![DOI](https://zenodo.org/badge/433593658.svg)](https://zenodo.org/badge/latestdoi/433593658)
 
+> **Starting new work? Use [egagli/global_snowmelt_runoff_onset](https://github.com/egagli/global_snowmelt_runoff_onset) instead.**
+> The methods prototyped in this toolbox have since been scaled into a global, 80 m resolution snowmelt runoff onset dataset covering water years 2015–2024, described in [Gagliano, E., Shean, D., and Henderson, S. (2026), *Earth Syst. Sci. Data*, 18, 5871–5894](https://doi.org/10.5194/essd-18-5871-2026). That repo holds the maintained processing code, the published dataset, and an [interactive map](https://egagli.github.io/global_snowmelt_runoff_onset/). This repository remains available as the research prototype behind the 2023 GRL paper below, but it is no longer the recommended starting point.
+
 This repository contains notebooks and tools to identify snowmelt timing using timeseries analysis of backscatter of Sentinel-1 C-band SAR. The newer tools in this toolbox use the [Sentinel 1 Radiometrically Terrain Corrected (RTC)](https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc) product hosted on Microsoft Planetary Computer.
 
 **Click [here](#Quickstart) to get to the quickstart example.** For more advanced use cases, please see the [examples folder](https://github.com/egagli/sar_snow_melt_timing/tree/main/examples) for notebooks that demonstrate example analysis that can be done using this toolbox. Check out the rendered notebooks using [nbviewer](https://nbviewer.org/github/egagli/sar_snow_melt_timing/tree/main/examples/). 
